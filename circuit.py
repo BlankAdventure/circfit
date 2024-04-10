@@ -4,34 +4,6 @@ Created on Thu Dec 21 17:49:36 2023
 
 @author: BlankAdventure
 
--class stores 'empty' circuit model
--once a fit is performed, element values get populated
-
--function to get input impedance given list of loads
----> Must specify element reactances -OR-
----> Must specify element values -OR-
----> Use fit values, if performed
----> Option to return drawing
-
-cm.get_zin(zlist, reactances=[...], draw='t/f')
-cm.get_zin(zlist, values=[...], draw='t/f')
-cm.get_zin(zlist, draw='t/f') #if fit available
-
-cm.populate_reactances()
-cm.populate_circvals()
-
-FITTING:
--Fit to given list of loads (1 or many)
----> Specify cost function 
-
-
-
-cm.fit(z_list, cost_func)
-
-cost_avg_swr
-cost_max_swr
-cost_deltaRI
-
 
 """
 import math
@@ -41,6 +13,7 @@ from scipy.optimize import least_squares
 import numpy as np
 import inspect
 import re
+
 
 
 import schemdraw
@@ -145,18 +118,35 @@ def drop_units(input_list: list[Union[str, float]]) -> list[float]:
     return out
 
 @listify('zlist')
-def rc(zlist, z0=50):
+def rc_from_z(zlist, z0=50):
     return [(z - z0) / (z + z0) for z in zlist]
 
 @listify('rlist')
-def swr (rlist):
+def swr_from_rc (rlist):
     return [(1+abs(r))/(1-abs(r)) for r in rlist]
+
+@listify('zlist')
+def swr_from_z (zlist, z0=50):
+    return swr_from_rc(rc_from_z(zlist,z0))
 
 def cost_max_swr(cm, x, zlist, zt=50):
     vals = cm.get_zin(loads=zlist, reactances_or_circvals=x)
-    err = max(swr(rc(vals)))
-    print(f'err: {err}')    
+    err = max(swr_from_z(vals))
+    #print(f'err: {err}')    
     return err
+
+def cost_mean_swr(cm, x, zlist, zt=50):
+    vals = cm.get_zin(loads=zlist, reactances_or_circvals=x)
+    err = np.mean(swr_from_z(vals))
+    #print(f'err: {err}')    
+    return err
+
+# def cost_max_absz(cm, x, zlist, zt=50):
+#     vals = cm.get_zin(loads=zlist, reactances_or_circvals=x)
+#     err = max(np.abs(np.asarray(zlist) - np.asarray(vals)))
+#     print(f'err: {err}')    
+#     return err
+
 
 @listify('elements')
 def get_component_values(F: float, elements: list[float]) -> list:
@@ -216,6 +206,7 @@ class Circuit():
             c_func = lambda x, F, val: x_func(x, xC(F, val))
             d_func = lambda label: elm.Capacitor().right().label(label)
             self.func_list.append( (x_func, c_func, d_func) )
+            self.orientation.append('s')
         else:
             print('Cannot add series after series!')
 
@@ -232,7 +223,7 @@ class Circuit():
             print('Cannot add parallel after parallel!')
 
     def draw(self, values=None, zin=None, zload=None, F=None):
-        segs = str(c.orientation).count('s')   
+        segs = str(self.orientation).count('s')   
         if self.orientation[0] == 'p' and self.orientation[-1] == 's':
             segs += 1
         if self.orientation[0] == 's' and self.orientation[-1] == 's':
@@ -247,7 +238,11 @@ class Circuit():
             values =  [f'{x:.1f}i' for x in self.fit_values]
         elif values is None and F is not None and self.fit_values is not None:
             values = add_units( get_component_values(F, self.fit_values) )
-            comp_str = re.sub('[PSZ-]', '', c.circ[:-1]).replace('C','F').replace('L','H')            
+            comp_str = re.sub('[PSZ-]', '', self.circ[:-1]).replace('C','F').replace('L','H')            
+            values = [i + j for i, j in zip(values, comp_str)]
+        elif values is not None and F is not None:
+            values = add_units( get_component_values(F, values) )
+            comp_str = re.sub('[PSZ-]', '', self.circ[:-1]).replace('C','F').replace('L','H')            
             values = [i + j for i, j in zip(values, comp_str)]            
         else:
             pass       
@@ -314,22 +309,34 @@ class Circuit():
     @listify('zlist')
     def fit(self, zlist, x0=None, cost_func=cost_max_swr):
         targ_wrapped = lambda x: cost_func(self, x, zlist, zt=50)
-        res = least_squares(targ_wrapped,x0,bounds=self.get_bounds(),jac='2-point',verbose=1,method='trf',xtol=1e-5,x_scale=1)
+        res = least_squares(targ_wrapped,x0,bounds=self.get_bounds(),jac='2-point',verbose=0,method='trf',xtol=1e-5,x_scale=1)
         self.fit_values = res.x # These are reactances
         return res
 
-
-zL = 30+1j*10 
-   
-c = Circuit()
-c.add_series_l()
-c.add_parallel_c()
-
-print ( c.get_zin([zL, 20+1j*5],['2.307u', '2.599n' ],1e6) )
-c.draw(['2.307u', '2.599n' ],zin=zL)
-
-zlist = [30+1j*10, 20+1j*5, 35+1j*15]
-res=c.fit(zlist,x0=[100,-100])
+if __name__ == "__main__":
+    zL = 30+1j*10 
+       
+    c = Circuit()
+    #c.add_series_l()
+    #c.add_parallel_c()
+    
+    c.add_parallel_l()
+    c.add_series_c()
+    c.add_parallel_l()
+    
+    #rint ( c.get_zin([zL, 20+1j*5],['2.307u', '2.599n' ],1e6) )
+    #c.draw(['2.307u', '2.599n' ],zin=zL)
+    
+    zlist = [30+1j*10, 20+1j*5, 35+1j*15]
+    zavg = np.mean(zlist)
+    
+    res1 = c.fit(zlist,x0=[100,-100],cost_func=cost_mean_swr)
+    
+    s1 = swr_from_z(c.get_zin(zlist))
+    
+    res2 = c.fit(zavg,x0=[100,-100],cost_func=cost_mean_swr)
+    
+    s2 = swr_from_z(c.get_zin(zlist))
 
     
     
