@@ -4,14 +4,15 @@ Created on Mon Apr  8 17:38:28 2024
 
 @author: BlankAdventure
 """
-#from matplotlib import pyplot as plt
 import plotly.graph_objects as go
 from nicegui import ui
 import numpy as np
 
+# Store list if load impedances to be matched
 zlist = []
 
-
+# Generates a new list of random load impedances in accordance with the selected
+# distribution and point count, and updates the Smith chart.
 def update() -> None:
     match distr.value:
         case 'Uniform':
@@ -29,16 +30,17 @@ def update() -> None:
         case _:
             pass
    
-    zlist = rr + 1j*ri
-    rc = [z/50 for z in zlist]
+    zlist = rr + 1j*ri #Convert to complex impedance
+    rc = [z/50 for z in zlist] #Normalize to 50 ohms
 
     patch = dict(imag=np.imag(rc),real=np.real(rc),marker_color="red")
     fig.update_traces(patch, selector = ({'name':'inputs'}))
     plot.update()    
 
-    
+# Layout the UI elements    
 with ui.row().classes('w-full'):    
-    with ui.column().style().classes('border bg-yellow-100'): #LEFT COLUMN
+    # ***** this is the left column *****
+    with ui.column().style().classes('border bg-yellow-100'): 
         with ui.element('div').classes('border p-2 bg-blue-100'):        
             ui.label('***** Input Options *****')
             
@@ -87,28 +89,14 @@ with ui.row().classes('w-full'):
                 showlegend=False,
                 name='outputs'
             ))        
-            # print(fig)
-            plot = ui.plotly(fig) #.classes('w-64 h-64')
-            #patch = dict(imag=[2,4],real=[2,3],marker_color="red")
-            #fig.update_traces(patch, selector = ({'name':'inputs'}))
-            #plot.update()
+            plot = ui.plotly(fig) 
 
+    # ***** this is the right column *****
     with ui.column():        
         ui.label('***** Right Column *****')
 
 
 
 
-#    with ui.element('div').classes('border p-2 bg-blue-100'):
-#        ui.label('LR - inside a colored div')
 
-    ##ui.label('UL')
-    #ui.label('UR')
-    #ui.label('LL')
-    #ui.label('LR')
-    #ui.card()
-    #ui.card()
-    #ui.card()
-    #ui.card()
-    
 ui.run()

@@ -34,14 +34,13 @@ cost_deltaRI
 
 
 """
+import math
+from collections.abc import Iterable
+from typing import Union
 from scipy.optimize import least_squares
-#from abc import ABC, abstractmethod, abstractproperty
-#import matplotlib.pyplot as plt
-#from functools import reduce, partial
 import numpy as np
-#import seaborn as sns
-#from scipy.optimize import least_squares
 import inspect
+import re
 
 
 import schemdraw
@@ -58,7 +57,7 @@ units = {
 # Assorted helper functions
 xL = lambda F, L: (1j*2*np.pi*F*L) 
 xC = lambda F, C: (1/(1j*2*np.pi*F*C)) 
-make_list = lambda x: [x] if type(x) is not list else x
+make_list = lambda x: [x] if not isinstance(x, Iterable) else x
 
 
 # Decorator for ensuring single inputs are converted to a list
@@ -78,38 +77,68 @@ def unitsoff(*argnames):
         def decorated(*args, **kwargs):
             bound_args = inspect.signature(f).bind(*args, **kwargs)            
             for a in argnames:            
-                bound_args.arguments[a] = as_numeric(bound_args.arguments[a])
+                bound_args.arguments[a] = drop_units(bound_args.arguments[a])
             return f(*bound_args.args, **bound_args.kwargs)
         return decorated
     return decorator
 
 
-# def get_component_values(F, elements):
-#     out = []
-#     for e in elements:
-#         if e > 0:
-#             out.append( e / (2*np.pi*F) )
-#         else:
-#             out.append( -1/(2*np.pi*F*e) )
-#     return out
 
-# Converts a single unit string to a numeric string
-def unitsToNumeric(str_val):
-    unit = str_val[-1]
-    try:
-        scale = units[unit]
-    except:
-        print('Error! Invalid unit!')
-    
-    return float(str_val[:-1])*scale
 
-# Given a list of values, identifies any unit strings and converts them to numeric values
-#@listify('input_list')
-def as_numeric(input_list):
+@listify('input_list')
+def add_units(input_list: list[float]) -> list[str]:
+    """
+    Converts list of numeric values to list of unit strings    
+
+    Parameters
+    ----------
+    input_list : list[float]
+        Numeric values to be converted to unit strings
+
+    Returns
+    -------
+    list[str]
+        Converted list of unit strings
+
+    """
+    out = []
+    for e in input_list:
+        exponent = math.floor(math.log10(abs(e)))
+        unit = min(units.keys(), key=lambda x: abs(exponent - math.log10(abs(units[x]))))
+        new_val = e / units[unit]
+        out.append(f'{new_val:.2f}{unit}')
+    return out
+
+
+# Given a list of values, identify and convert unit strings to numeric values
+@listify('input_list')
+def drop_units(input_list: list[Union[str, float]]) -> list[float]:
+    """
+    Given a list of values, identify and convert unit strings to numeric values    
+
+    Parameters
+    ----------
+    input_list : list[Union[str, float]]
+        Values or unit strings to convert to numeral
+
+    Raises
+    ------
+    ValueError
+        Invalid unit supplied
+
+    Returns
+    -------
+    list[float]
+        List of converted values (i.e, numeral)
+
+    """
     out = []
     for e in input_list:
         if isinstance(e, str):
-            numeric = unitsToNumeric(e)
+            try:
+                numeric = float(e[:-1]) * units[e[-1]]
+            except KeyError:
+                raise ValueError(f'Unrecognized unit: {e[-1]}')
         else:
             numeric = e
         out.append(numeric)
@@ -129,25 +158,15 @@ def cost_max_swr(cm, x, zlist, zt=50):
     print(f'err: {err}')    
     return err
 
-# def cost_avg_swr(cm, x, zlist, zt=50):
-#     vals = []
-#     for z in zlist:
-#         out = cm.reactance_compute(x,z)
-#         vals.append ( swr(rc(out)) )    
-#     err = np.mean(vals)
-#     print(f'out: {out:.2f} | err: {err}')    
-#     return err
-
-# def cost_max_absz(cm, x, zlist, zt=50):
-#     vals = []
-#     for z in zlist:
-#         out = cm.reactance_compute(x,z)
-#         vals.append ( out - zt )
-
-#     err = max(abs(np.asarray(vals)))
-#     print(f'out: {out:.2f} | err: {err}')    
-#     return err
-
+@listify('elements')
+def get_component_values(F: float, elements: list[float]) -> list:
+    out = []
+    for e in elements:
+        if e > 0:
+            out.append( e / (2*np.pi*F) )
+        else:
+            out.append( -1/(2*np.pi*F*e) )
+    return out
     
         
 class Circuit():
@@ -222,9 +241,21 @@ class Circuit():
             segs += 1
         if self.orientation[0] == 'p' and self.orientation[-1] == 'p':
             segs += 2
-            
-        with schemdraw.Drawing():       
-            R = elm.ResistorIEC().down().hold()
+        
+        
+        if values is None and F is None and self.fit_values is not None:
+            values =  [f'{x:.1f}i' for x in self.fit_values]
+        elif values is None and F is not None and self.fit_values is not None:
+            values = add_units( get_component_values(F, self.fit_values) )
+            comp_str = re.sub('[PSZ-]', '', c.circ[:-1]).replace('C','F').replace('L','H')            
+            values = [i + j for i, j in zip(values, comp_str)]            
+        else:
+            pass       
+        
+        with schemdraw.Drawing():                   
+            load_label = '$Z_{load}$'
+            if zload: load_label +=  f'={zload}'
+            R = elm.ResistorIEC().down().hold().label(load_label)            
             if self.orientation[0] == 'p': elm.Line().right()
             for e, func in enumerate(self.func_list):
                 label = values[e] if values is not None else ""
@@ -237,8 +268,9 @@ class Circuit():
                 elm.Line().right()
             ld = elm.Dot()
             line = elm.Line().at(ld.center).to(ud.center).color('white')
-            lstr = '$Z_{in}$'
-            elm.ZLabel().at(line.center).left().label(lstr + f"={zin}", loc='top').color('black')
+            in_label = '$Z_{in}$'
+            if zload: in_label +=  f'={zin}'
+            elm.ZLabel().at(line.center).left().label(in_label, loc='top').color('black')
 
     def get_bounds(self):
         return [tuple( [ x[0] for x in self.bounds ]), tuple( [ x[1] for x in self.bounds ])]
