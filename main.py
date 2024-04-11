@@ -4,10 +4,16 @@ Created on Mon Apr  8 17:38:28 2024
 
 @author: BlankAdventure
 """
-import experiments
+import os
+os.environ['FOR_DISABLE_CONSOLE_CTRL_HANDLER'] = '1'
+
+import circuit as ct
+import experiments as ex
 import plotly.graph_objects as go
 from nicegui import ui
 import numpy as np
+
+
 
 # Store list if load impedances to be matched
 zlist = []
@@ -17,10 +23,36 @@ min_r = 0
 max_i = 100
 min_i = -100
 
+opts = {'columnDefs': [{'headerName': 'Circuit', 'field': 'Circuit','sortable': False},
+                       {'headerName': 'Min', 'field': 'Min','sortable': True},
+                       {'headerName': 'Mean', 'field': 'Mean','sortable': True},
+                       {'headerName': 'p95', 'field': 'p95','sortable': True},
+                       {'headerName': 'Max', 'field': 'Max','sortable': True}],
+        'rowSelection': 'single'}
+
+
+def populate_table(table_data):
+    if table_data is not None:
+        table.clear()
+        with table:
+            ui.label('Fit Results')
+            ui.aggrid.from_pandas(table_data, options=opts)
+            #grid.on('firstDataRendered', lambda: grid.run_column_method('autoSizeAllColumns'))
+
+def fit():
+    print('doing fit')
+    #print(zlist)
+    res = ex.do_experiment(zlist, ex.all_components,[2],ct.cost_max_swr)
+    print('DONE')
+    
+    df = ex.to_pandas(res)
+    df = df.round(2)
+    populate_table( df )
 
 # Generates a new list of random load impedances in accordance with the selected
 # distribution and point count, and updates the Smith chart.
 def update() -> None:
+    global zlist
     rmax = r_range.value['max']
     rmin = r_range.value['min']
     imax = i_range.value['max']
@@ -28,13 +60,13 @@ def update() -> None:
     
     match distr.value:
         case 0: #uniform
-            zlist = experiments.random_points_uniform( (rmin, rmax), (imin, imax), int(points.value), plot=False)
+            zlist = ex.random_points_uniform( (rmin, rmax), (imin, imax), int(points.value), plot=False)
         case 1: #guassian
             sr = ( rmax - rmin ) / 6
             mr = ( rmax + rmin ) / 2            
             si = ( imax - imin ) / 6
             mi = (imax + imin ) / 2
-            zlist = experiments.random_points_gaussian(mr+1j*mi, sr, si, corr.value, int(points.value), plot=False)
+            zlist = ex.random_points_gaussian(mr+1j*mi, sr, si, corr.value, int(points.value), plot=False)
         case _:
             pass
    
@@ -80,7 +112,7 @@ with ui.row().classes('w-full'):
             with ui.row().classes('items-center'):
                 ui.select(['Max SWR','Mean SWR'],value='Max SWR',label='Minimize').classes('w-32').props('square outlined dense')
                 ui.input(value='2,3', label='Levels').classes('w-32').props('square outlined dense').disable()
-                ui.button('Fit').classes('w-32')
+                ui.button('Fit', on_click=fit).classes('w-32')
                 
         with ui.element('div').classes('border p-2 bg-blue-100'):        
             fig = go.Figure()
@@ -111,9 +143,14 @@ with ui.row().classes('w-full'):
             plot = ui.plotly(fig) 
 
     # ***** this is the right column *****
-    with ui.column():        
-        ui.label('***** Right Column *****')
-
+    with ui.column().style().classes('border bg-yellow-100 gap-2 w-auto'):        
+        # Results table
+        with ui.element('div').classes('border p-2 bg-blue-100 space-y-2 self-center').style('width: 550px;') as table:
+            ui.label('Fit Results')
+            populate_table(None)
+        # Circuit image:    
+        with ui.element('div').classes('border p-2 bg-blue-100'): 
+            ui.label('circuit diagram')
 
 
 

@@ -10,6 +10,7 @@ import re
 import circuit as ct
 import numpy as np
 from tabulate import tabulate
+import pandas as pd
 
 mapping = {'A': (lambda x: x.add_series_l(), lambda x: x),    #LS
            'B': (lambda x: x.add_series_c(), lambda x: -x),   #CS
@@ -20,7 +21,14 @@ mapping = {'A': (lambda x: x.add_series_l(), lambda x: x),    #LS
 all_components = ['A', 'B', 'C', 'D']
 tline_components = ['A','D']
 
+# Convert a list of results to a pandas dataframe
+def to_pandas(results: list[tuple]):
+#    subset = [ (x[0], x[0].circ, *x[1:]) for x in results]
+    subset = [ (x[0].circ, *x[1:]) for x in results]
 
+    df = pd.DataFrame(subset)
+    df.columns =['Circuit', 'Min', 'Mean', 'p95', 'Max']
+    return df
 
 def print_nice(results: list[tuple]) -> None:
     new = [ (x[0].circ, *x[1:]) for x in results]
@@ -102,8 +110,8 @@ def clean(combinations: list[str]): #-> tuple[list(tuple), list(tuple)]:
 
 
 if __name__ == "__main__":
-    zlist = random_points_gaussian(30+1j*20, 10, 10, 0.4, 50)
-    #res = do_experiment(zlist, all_components,3,ct.cost_max_swr)
+    zlist = random_points_gaussian(30+1j*20, 10, 10, 0.4, 20)
+    res = do_experiment(zlist, all_components,2,ct.cost_max_swr)
     
     #res = do_experiment(30+1j*20, all_components,[2,3,4],ct.cost_max_swr)
     
