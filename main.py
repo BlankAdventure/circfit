@@ -24,7 +24,7 @@ min_r = 0
 max_i = 100
 min_i = -100
 
-opts = {'columnDefs': [{'headerName': 'Circuit', 'field': 'Circuit','sortable': False},
+table_options = {'columnDefs': [{'headerName': 'Circuit', 'field': 'Circuit','sortable': False},
                        {'headerName': 'Min', 'field': 'Min','sortable': True},
                        {'headerName': 'Mean', 'field': 'Mean','sortable': True},
                        {'headerName': 'p95', 'field': 'p95','sortable': True},
@@ -46,15 +46,15 @@ def populate_table(table_data):
         table.clear()
         with table:
             ui.label('Fit Results')
-            ui.aggrid.from_pandas(table_data, options=opts)
+            ui.aggrid.from_pandas(table_data, options=table_options)
             #grid.on('firstDataRendered', lambda: grid.run_column_method('autoSizeAllColumns'))
 @wrap
 def fit() -> None:
     overlay.set_visibility(True)
     res = ex.do_experiment(zlist, ex.all_components,[2],ct.cost_max_swr)
-    df = ex.to_pandas(res)
-    df = df.round(2)
-    populate_table( df )
+    #df = ex.to_pandas(res)
+    #df = df.round(2)
+    populate_table( ex.to_pandas(res).round(2) )
     overlay.set_visibility(False)
 
 # Generates a new list of random load impedances in accordance with the selected
