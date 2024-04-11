@@ -49,14 +49,13 @@ def populate_table(table_data):
             ui.aggrid.from_pandas(table_data, options=opts)
             #grid.on('firstDataRendered', lambda: grid.run_column_method('autoSizeAllColumns'))
 @wrap
-def fit():
-    print('doing fit..')
+def fit() -> None:
+    overlay.set_visibility(True)
     res = ex.do_experiment(zlist, ex.all_components,[2],ct.cost_max_swr)
-    print('DONE')
-    
     df = ex.to_pandas(res)
     df = df.round(2)
     populate_table( df )
+    overlay.set_visibility(False)
 
 # Generates a new list of random load impedances in accordance with the selected
 # distribution and point count, and updates the Smith chart.
@@ -85,6 +84,12 @@ def update() -> None:
     plot.update()    
 
 # Layout the UI elements    
+
+with ui.element('div').style('position: fixed; display: block; width: 100%; height: 100%; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0,0,0,0.5); z-index: 2; cursor: pointer;') as overlay:
+    with ui.element('div').classes("h-screen flex items-center justify-center"):
+        ui.label('Performing fit...').style("font-size: 50px; color: white;")
+overlay.set_visibility(False)
+
 with ui.row().classes('w-full'):    
     # ***** this is the left column *****
     with ui.column().style().classes('border bg-yellow-100 gap-2'): #control spacing between each element/panel
