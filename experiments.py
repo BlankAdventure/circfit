@@ -42,7 +42,7 @@ def random_points_uniform (r_range: tuple[float, float], i_range: tuple[float, f
         plt.axis('equal')
         plt.grid()
         plt.show()
-    return rr + 1j*ri  
+    return list(rr + 1j*ri)
     
 def random_points_gaussian (znom: complex, r_std: float, i_std: float, corr: float, count: int, plot: bool = True) -> list[complex]:
     c0 = corr*r_std*i_std
@@ -56,7 +56,7 @@ def random_points_gaussian (znom: complex, r_std: float, i_std: float, corr: flo
         plt.axis('equal')
         plt.grid()
         plt.show()
-    return pts[:,0] + 1j*pts[:,1]  
+    return list(pts[:,0] + 1j*pts[:,1])
 
 def single_run(zlist: list[complex], path: tuple, targ_func=ct.cost_max_swr) -> tuple:
     c = ct.Circuit()
