@@ -7,12 +7,13 @@ Created on Mon Apr  8 17:38:28 2024
 import os
 os.environ['FOR_DISABLE_CONSOLE_CTRL_HANDLER'] = '1'
 
+import asyncio
 import circuit as ct
 import experiments as ex
 import plotly.graph_objects as go
 from nicegui import ui
 import numpy as np
-
+from functools import wraps, partial
 
 
 # Store list if load impedances to be matched
@@ -30,6 +31,15 @@ opts = {'columnDefs': [{'headerName': 'Circuit', 'field': 'Circuit','sortable': 
                        {'headerName': 'Max', 'field': 'Max','sortable': True}],
         'rowSelection': 'single'}
 
+def wrap(func):
+    @wraps(func)
+    async def run(*args, loop=None, executor=None, **kwargs):
+        if loop is None:
+            loop = asyncio.get_event_loop()
+        pfunc = partial(func, *args, **kwargs)
+        return await loop.run_in_executor(executor, pfunc)
+    return run
+
 
 def populate_table(table_data):
     if table_data is not None:
@@ -38,10 +48,9 @@ def populate_table(table_data):
             ui.label('Fit Results')
             ui.aggrid.from_pandas(table_data, options=opts)
             #grid.on('firstDataRendered', lambda: grid.run_column_method('autoSizeAllColumns'))
-
+@wrap
 def fit():
-    print('doing fit')
-    #print(zlist)
+    print('doing fit..')
     res = ex.do_experiment(zlist, ex.all_components,[2],ct.cost_max_swr)
     print('DONE')
     
@@ -69,7 +78,6 @@ def update() -> None:
             zlist = ex.random_points_gaussian(mr+1j*mi, sr, si, corr.value, int(points.value), plot=False)
         case _:
             pass
-   
     rc = [z/50 for z in zlist] #Normalize to 50 ohms
 
     patch = dict(imag=np.imag(rc),real=np.real(rc),marker_color="red")
