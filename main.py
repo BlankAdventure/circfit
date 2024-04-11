@@ -4,6 +4,7 @@ Created on Mon Apr  8 17:38:28 2024
 
 @author: BlankAdventure
 """
+import experiments
 import plotly.graph_objects as go
 from nicegui import ui
 import numpy as np
@@ -20,23 +21,23 @@ min_i = -100
 # Generates a new list of random load impedances in accordance with the selected
 # distribution and point count, and updates the Smith chart.
 def update() -> None:
+    rmax = r_range.value['max']
+    rmin = r_range.value['min']
+    imax = i_range.value['max']
+    imin = i_range.value['min']
+    
     match distr.value:
-        case 'Uniform':
-            rr = np.random.uniform(low=r_range.value['min'],high=r_range.value['max'],size=int(counts.value))
-            ri = np.random.uniform(low=i_range.value['min'],high=i_range.value['max'],size=int(counts.value))
-        case 'Gaussian':
-            sr = ( r_range.value['max'] - r_range.value['min'] ) / 6
-            mr = ( r_range.value['max'] + r_range.value['min'] ) / 2            
-            si = ( i_range.value['max'] - i_range.value['min'] ) / 6
-            mi = ( i_range.value['max'] + i_range.value['min'] ) / 2
-            rr = np.random.normal(mr, sr, int(counts.value))
-            ri = np.random.normal(mi, si, int(counts.value))            
-            rr = rr[(rr >= min_r) & (rr <= max_r)]
-            ri = ri[(ri >= min_i) & (ri <= max_i)]
+        case 0: #uniform
+            zlist = experiments.random_points_uniform( (rmin, rmax), (imin, imax), int(points.value), plot=False)
+        case 1: #guassian
+            sr = ( rmax - rmin ) / 6
+            mr = ( rmax + rmin ) / 2            
+            si = ( imax - imin ) / 6
+            mi = (imax + imin ) / 2
+            zlist = experiments.random_points_gaussian(mr+1j*mi, sr, si, corr.value, int(points.value), plot=False)
         case _:
             pass
    
-    zlist = rr + 1j*ri #Convert to complex impedance
     rc = [z/50 for z in zlist] #Normalize to 50 ohms
 
     patch = dict(imag=np.imag(rc),real=np.real(rc),marker_color="red")
@@ -51,8 +52,10 @@ with ui.row().classes('w-full'):
             #ui.label('***** Input Options *****')
             
             with ui.row().classes('items-center'):
-                counts = ui.input(value=50, label='Points').classes('w-32').props('square outlined dense')
-                distr = ui.select(['Uniform','Gaussian'],value='Uniform',label='Distribution').classes('w-32').props('square outlined dense')
+                points = ui.input(value=50, label='Points').classes('w-32').props('square outlined dense')
+                distr = ui.select({0: 'Uniform', 1: 'Gaussian'},value=0,label='Distribution', 
+                                  on_change=lambda x: test.set_visibility(True) if x.value==1 else test.set_visibility(False) 
+                                  ).classes('w-32').props('square outlined dense')
                 ui.button('Plot', on_click=update).classes('w-32')
             
             with ui.row().classes('items-center'):
@@ -66,6 +69,13 @@ with ui.row().classes('w-full'):
                 i_range = ui.range(min=min_i, max=max_i, value={'min':5, 'max':20}).classes('w-72')
                 ui.label().bind_text_from(i_range, 'value',
                               backward=lambda v: f'{v["min"]} to {v["max"]} [ohms]')
+
+            with ui.row().classes('items-center') as test:
+                ui.label('CorCoef:')
+                corr = ui.slider(min=-1, max=1, value=0, step=0.1).props('selection-color="transparent"').classes('w-72')
+                ui.label().bind_text_from(corr, 'value', backward=lambda v: f'{v}')
+                test.set_visibility(False)
+        
 
             with ui.row().classes('items-center'):
                 ui.select(['Max SWR','Mean SWR'],value='Max SWR',label='Minimize').classes('w-32').props('square outlined dense')

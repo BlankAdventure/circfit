@@ -23,7 +23,7 @@ tline_components = ['A','D']
 
 
 def print_nice(results: list[tuple]) -> None:
-    new = [ (x[0].circ, *x[1:]) for x in res]
+    new = [ (x[0].circ, *x[1:]) for x in results]
     print(tabulate(new, headers=["Circuit","Min","Avg","p95","Max"],floatfmt=".2f",tablefmt="simple",showindex="always"))
 
 def random_points_uniform (r_range: tuple[float, float], i_range: tuple[float, float], count: int, plot: bool = True) -> list[complex]:
@@ -40,27 +40,15 @@ def random_points_gaussian (znom: complex, r_std: float, i_std: float, corr: flo
     c0 = corr*r_std*i_std
     cov = np.asarray([[r_std**2, c0],[c0, i_std**2]])
     pts = np.random.multivariate_normal(mean=[np.real(znom),np.imag(znom)], cov=cov, size=count)
+    
+    # Remove any points with negative real value
+    pts = np.asarray([p for p in pts if p[0] > 0])
     if plot:
         plt.plot(pts[:, 0], pts[:, 1], '.', alpha=0.5)
         plt.axis('equal')
         plt.grid()
         plt.show()
     return pts[:,0] + 1j*pts[:,1]  
-
-# def simple_fit(zl,zlist):
-#     valid = get_combs(list_all, 2)
-#     results = []
-#     for path in valid:
-#         c = ct.Circuit()
-#         x0 = []
-#         for e in path:
-#             mapping[e][0](c)
-#             x0.append(  mapping[e][1](100)  )
-#         res = c.do_single_fit(x0, zl)
-#         swr = vswr(c, zlist)
-#         p95 = np.percentile(swr, 95)
-#         results.append(  (c.circ,f'{np.mean(swr):.2f}',f'{np.max(swr):.2f}',f'{p95:.2f}')  )
-#     return results
 
 def single_run(zlist: list[complex], path: tuple, targ_func=ct.cost_max_swr) -> tuple:
     c = ct.Circuit()
@@ -113,28 +101,29 @@ def clean(combinations: list[str]): #-> tuple[list(tuple), list(tuple)]:
     return good_list, bad_list
 
 
-zlist = random_points_gaussian(30+1j*20, 10, 10, 0.4, 50)
-res = do_experiment(zlist, all_components,3,ct.cost_max_swr)
-
-#res = do_experiment(30+1j*20, all_components,[2,3,4],ct.cost_max_swr)
-
-print_nice(res)
-
-res[3][0].draw()
-
-#znom = 30
-
-#zlist = random_
-
-#zlist = ct.get_test_points_guassian(znom,5,20)
-#res_nom = simple_fit(znom, zlist)
-
-#res_nom = do_experiment(list_all, [2], [znom], targ_func=ct.targ_func_multi_max_swr)
-#zlist = ct.get_test_points_guass(30, [[8,3.5],[2.5,4]], 500)
-#zlist = ct.get_test_points_guass(znom, [[8,7],[1,1]], 500)
-
-
-#res = do_experiment(list_all, [2,4], zlist)
+if __name__ == "__main__":
+    zlist = random_points_gaussian(30+1j*20, 10, 10, 0.4, 50)
+    #res = do_experiment(zlist, all_components,3,ct.cost_max_swr)
+    
+    #res = do_experiment(30+1j*20, all_components,[2,3,4],ct.cost_max_swr)
+    
+    #print_nice(res)
+    
+    #res[3][0].draw()
+    
+    #znom = 30
+    
+    #zlist = random_
+    
+    #zlist = ct.get_test_points_guassian(znom,5,20)
+    #res_nom = simple_fit(znom, zlist)
+    
+    #res_nom = do_experiment(list_all, [2], [znom], targ_func=ct.targ_func_multi_max_swr)
+    #zlist = ct.get_test_points_guass(30, [[8,3.5],[2.5,4]], 500)
+    #zlist = ct.get_test_points_guass(znom, [[8,7],[1,1]], 500)
+    
+    
+    #res = do_experiment(list_all, [2,4], zlist)
 
 
 

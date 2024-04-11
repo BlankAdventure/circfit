@@ -132,20 +132,17 @@ def swr_from_z (zlist, z0=50):
 def cost_max_swr(cm, x, zlist, zt=50):
     vals = cm.get_zin(loads=zlist, reactances_or_circvals=x)
     err = max(swr_from_z(vals))
-    #print(f'err: {err}')    
     return err
 
 def cost_mean_swr(cm, x, zlist, zt=50):
     vals = cm.get_zin(loads=zlist, reactances_or_circvals=x)
     err = np.mean(swr_from_z(vals))
-    #print(f'err: {err}')    
     return err
 
-# def cost_max_absz(cm, x, zlist, zt=50):
-#     vals = cm.get_zin(loads=zlist, reactances_or_circvals=x)
-#     err = max(np.abs(np.asarray(zlist) - np.asarray(vals)))
-#     print(f'err: {err}')    
-#     return err
+def cost_max_absz(cm, x, zlist, zt=50):
+    vals = cm.get_zin(loads=zlist, reactances_or_circvals=x)
+    err = max(np.abs(np.asarray(zlist) - np.asarray(vals)))
+    return err
 
 
 @listify('elements')
