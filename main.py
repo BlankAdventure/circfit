@@ -14,14 +14,16 @@ import plotly.graph_objects as go
 from nicegui import ui
 import numpy as np
 from functools import wraps, partial
-# Store list if load impedances to be matched
-zlist = []
 
+zlist = [] # Store list of load impedances to be matched/fit
+
+# min/max settings for sliders/impedance values
 max_r = 200
 min_r = 0
 max_i = 100
 min_i = -100
 
+# aggrid table options. Must match column names in results df
 table_options = {'columnDefs': [{'headerName': 'Circuit', 'field': 'Circuit','sortable': False},
                        {'headerName': 'Min', 'field': 'Min','sortable': True},
                        {'headerName': 'Mean', 'field': 'Mean','sortable': True},
@@ -29,6 +31,7 @@ table_options = {'columnDefs': [{'headerName': 'Circuit', 'field': 'Circuit','so
                        {'headerName': 'Max', 'field': 'Max','sortable': True}],
         'rowSelection': 'single'}
 
+# Decorator to convert standard funcs to async (func must be called *from* async)
 def wrap(func):
     @wraps(func)
     async def run(*args, loop=None, executor=None, **kwargs):
@@ -38,6 +41,7 @@ def wrap(func):
         return await loop.run_in_executor(executor, pfunc)
     return run
 
+# Update fit results table and circuit image 
 def refresh_table(res_df) -> None:
     def update_outputs(event) -> None:
         idx = int(event.args['rowId'])
@@ -51,17 +55,16 @@ def refresh_table(res_df) -> None:
         image.set_content(cm.draw(for_web=True).decode('utf-8'))
             
     if res_df is not None:
-        table.clear()
+        grid.clear()
         subset = res_df.loc[:, res_df.columns != 'Model'] #We only want the numerical results data, now the object column
-        with table:
-            ui.label('Fit Results')
-            ui.aggrid.from_pandas(subset, options=table_options).on('rowDoubleClicked', lambda event: update_outputs(event) , ['rowId'] )
-           
+        with grid:   
+            ui.aggrid.from_pandas(subset, options=table_options).on('rowDoubleClicked', lambda event: update_outputs(event) , ['rowId'] ).style('height: 450px;')
+     
+# Do the fit!
 @wrap
 def fit() -> None:
     overlay.set_visibility(True)
-    res = ex.do_experiment(zlist, ex.all_components,2,ct.cost_max_swr)
-    ex.print_nice(res)
+    res = ex.do_experiment(zlist, ex.all_components,[2,3],ct.cost_max_swr)
     refresh_table( ex.to_pandas(res, include_model=True).round(2) )
     overlay.set_visibility(False)
 
@@ -88,24 +91,31 @@ def update_inputs() -> None:
         case _:
             pass
     rc = [z/50 for z in zlist] #Normalize to 50 ohms
-
-    patch = dict(imag=np.imag(rc),real=np.real(rc),marker_color="red")
-    fig.update_traces(patch, selector = ({'name':'inputs'}))
+    fig.update_traces(patch = dict( imag=np.imag(rc), real=np.real(rc) ), selector = ({'name':'inputs'}))
     plot.update()    
 
-# Layout the UI elements    
 
+
+# **************************************************
+#           Layout the UI elements                 #
+# **************************************************
+
+
+# Overlay element -> blocks UI during fit operaion
 with ui.element('div').style('position: fixed; display: block; width: 100%; height: 100%; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0,0,0,0.5); z-index: 2; cursor: pointer;') as overlay:
     with ui.element('div').classes("h-screen flex items-center justify-center"):
         ui.label('Performing fit...').style("font-size: 50px; color: white;")
 overlay.set_visibility(False)
 
-with ui.row().classes('w-full'):    
+# ***** top-level positioning element *****
+with ui.row().classes('w-full bg-green-50'):
+    
     # ***** this is the left column *****
     with ui.column().style().classes('border bg-yellow-100 gap-2'): #control spacing between each element/panel
+
+        # --- input config panel ---
+        ui.label('Input Config')
         with ui.element('div').classes('border p-2 bg-blue-100 space-y-2 self-center'): #space-y works here, gap doesn't
-            #ui.label('***** Input Options *****')
-            
             with ui.row().classes('items-center'):
                 points = ui.input(value=50, label='Points').classes('w-32').props('square outlined dense')
                 distr = ui.select({0: 'Uniform', 1: 'Gaussian'},value=0,label='Distribution', 
@@ -113,30 +123,34 @@ with ui.row().classes('w-full'):
                                   ).classes('w-32').props('square outlined dense')
                 ui.button('Plot', on_click=update_inputs).classes('w-32')
             
+            # real value slider
             with ui.row().classes('items-center'):
                 ui.label('Real:')
                 r_range = ui.range(min=min_r, max=max_r, value={'min':10, 'max':60}).classes('w-72')
                 ui.label().bind_text_from(r_range, 'value',
                               backward=lambda v: f'{v["min"]} to {v["max"]} [ohms]')
             
+            # imag value slider
             with ui.row().classes('items-center'):
                 ui.label('Imag:')
                 i_range = ui.range(min=min_i, max=max_i, value={'min':5, 'max':20}).classes('w-72')
                 ui.label().bind_text_from(i_range, 'value',
                               backward=lambda v: f'{v["min"]} to {v["max"]} [ohms]')
-
+            
+            # corr coef slider
             with ui.row().classes('items-center') as test:
                 ui.label('CorCoef:')
                 corr = ui.slider(min=-1, max=1, value=0, step=0.1).props('selection-color="transparent"').classes('w-72')
                 ui.label().bind_text_from(corr, 'value', backward=lambda v: f'{v}')
                 test.set_visibility(False)
         
-
+            # fit options
             with ui.row().classes('items-center'):
                 ui.select(['Max SWR','Mean SWR'],value='Max SWR',label='Minimize').classes('w-32').props('square outlined dense')
                 ui.input(value='2,3', label='Levels').classes('w-32').props('square outlined dense').disable()
                 ui.button('Fit', on_click=fit).classes('w-32')
                 
+        # --- smith chart panel ---
         with ui.element('div').classes('border p-2 bg-blue-100'):        
             fig = go.Figure()
             fig.update_layout(margin=dict(l=25, r=25, t=25, b=25), autosize=False, width=500, height=500)        
@@ -151,11 +165,11 @@ with ui.row().classes('w-full'):
                 mode='markers',
                 showlegend=False,
                 name='inputs'
-            ))        
-    
+            ))
             fig.add_trace(go.Scattersmith(
                 imag=[],
                 real=[],
+                opacity = 0.7,
                 marker_symbol='circle',
                 marker_size=8,
                 marker_color="blue",
@@ -166,16 +180,18 @@ with ui.row().classes('w-full'):
             plot = ui.plotly(fig) 
 
     # ***** this is the right column *****
-    with ui.column().style().classes('border bg-yellow-100 gap-2 w-auto'):        
+    with ui.column().style().classes('border bg-yellow-100 gap-2'):        
 
         # --- results table ---
-        with ui.element('div').classes('border p-2 bg-blue-100 space-y-2 self-center').style('width: 550px;') as table:
-            ui.label('Fit Results')
-
+        ui.label('Fit Results').classes('border w-full')
+        grid = ui.element('div').style('width: 550px;')
+        #grid = ui.aggrid(options={})
+        #with ui.element('div').classes('border p-2 bg-blue-100 self-center').style('width: 550px;') as table:
+        #    pass
         # --- circuit image --- 
-        with ui.element('div').classes('border p-2 bg-blue-100'): 
-            ui.label('circuit diagram')
-            image = ui.html()
+        ui.label('Schematic').classes('border w-full')
+        image = ui.html().classes('self-center').style('height: 200px;')
+        #with ui.element('div').classes('border p-2 bg-blue-100'): 
 
 
 
