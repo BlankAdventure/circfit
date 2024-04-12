@@ -14,8 +14,6 @@ import plotly.graph_objects as go
 from nicegui import ui
 import numpy as np
 from functools import wraps, partial
-import base64
-
 # Store list if load impedances to be matched
 zlist = []
 
@@ -40,43 +38,35 @@ def wrap(func):
         return await loop.run_in_executor(executor, pfunc)
     return run
 
-
-
-def populate_table(res_df):
-    def uo(event):
+def refresh_table(res_df) -> None:
+    def update_outputs(event) -> None:
         idx = int(event.args['rowId'])
         cm = res_df.loc[idx, 'Model']
         zin = cm.get_zin(zlist)
         rc = [z/50 for z in zin] #Normalize to 50 ohms
-        patch = dict(imag=np.imag(rc),real=np.real(rc))
-        fig.update_traces(patch, selector = ({'name':'outputs'}))
+        fig.update_traces(patch=dict(imag=np.imag(rc),real=np.real(rc)), selector = ({'name':'outputs'}))
         plot.update()    
         
-        with ui.row():
-            ui.html(cm.draw(for_web=True).decode('utf-8'))
+        image.clear()
+        image.set_content(cm.draw(for_web=True).decode('utf-8'))
             
     if res_df is not None:
         table.clear()
-        subset = res_df.loc[:, res_df.columns != 'Model']
+        subset = res_df.loc[:, res_df.columns != 'Model'] #We only want the numerical results data, now the object column
         with table:
             ui.label('Fit Results')
-            ui.aggrid.from_pandas(subset, options=table_options).on('cellDoubleClicked', lambda event: uo(event) )
-            #grid.on('firstDataRendered', lambda: grid.run_column_method('autoSizeAllColumns'))
-            
-
-            
+            ui.aggrid.from_pandas(subset, options=table_options).on('rowDoubleClicked', lambda event: update_outputs(event) , ['rowId'] )
+           
 @wrap
 def fit() -> None:
     overlay.set_visibility(True)
-    res = ex.do_experiment(zlist, ex.all_components,[2,3],ct.cost_max_swr)
+    res = ex.do_experiment(zlist, ex.all_components,2,ct.cost_max_swr)
     ex.print_nice(res)
-    populate_table( ex.to_pandas(res, include_model=True).round(2) )
+    refresh_table( ex.to_pandas(res, include_model=True).round(2) )
     overlay.set_visibility(False)
 
 
-def update_outputs(event) -> None:
-    #print(event)
-    print(event.args['rowIndex'])  
+    
 # Generates a new list of random load impedances in accordance with the selected
 # distribution and point count, and updates the Smith chart.
 def update_inputs() -> None:
@@ -93,7 +83,7 @@ def update_inputs() -> None:
             sr = ( rmax - rmin ) / 6
             mr = ( rmax + rmin ) / 2            
             si = ( imax - imin ) / 6
-            mi = (imax + imin ) / 2
+            mi = ( imax + imin ) / 2
             zlist = ex.random_points_gaussian(mr+1j*mi, sr, si, corr.value, int(points.value), plot=False)
         case _:
             pass
@@ -177,13 +167,15 @@ with ui.row().classes('w-full'):
 
     # ***** this is the right column *****
     with ui.column().style().classes('border bg-yellow-100 gap-2 w-auto'):        
-        # Results table
+
+        # --- results table ---
         with ui.element('div').classes('border p-2 bg-blue-100 space-y-2 self-center').style('width: 550px;') as table:
             ui.label('Fit Results')
-            populate_table(None)
-        # Circuit image:    
+
+        # --- circuit image --- 
         with ui.element('div').classes('border p-2 bg-blue-100'): 
             ui.label('circuit diagram')
+            image = ui.html()
 
 
 
