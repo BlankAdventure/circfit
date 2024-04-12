@@ -14,7 +14,7 @@ import plotly.graph_objects as go
 from nicegui import ui
 import numpy as np
 from functools import wraps, partial
-
+import base64
 
 # Store list if load impedances to be matched
 zlist = []
@@ -51,7 +51,10 @@ def populate_table(res_df):
         patch = dict(imag=np.imag(rc),real=np.real(rc))
         fig.update_traces(patch, selector = ({'name':'outputs'}))
         plot.update()    
-    
+        
+        with ui.row():
+            ui.html(cm.draw(for_web=True).decode('utf-8'))
+            
     if res_df is not None:
         table.clear()
         subset = res_df.loc[:, res_df.columns != 'Model']

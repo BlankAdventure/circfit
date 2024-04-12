@@ -219,7 +219,7 @@ class Circuit():
         else:
             print('Cannot add parallel after parallel!')
 
-    def draw(self, values=None, zin=None, zload=None, F=None):
+    def draw(self, values=None, zin=None, zload=None, F=None, for_web=False ):
         segs = str(self.orientation).count('s')   
         if self.orientation[0] == 'p' and self.orientation[-1] == 's':
             segs += 1
@@ -244,7 +244,7 @@ class Circuit():
         else:
             pass       
         
-        with schemdraw.Drawing():                   
+        with schemdraw.Drawing(show = not for_web, canvas='svg') as d:            
             load_label = '$Z_{load}$'
             if zload: load_label +=  f'={zload}'
             R = elm.ResistorIEC().down().hold().label(load_label)            
@@ -263,6 +263,7 @@ class Circuit():
             in_label = '$Z_{in}$'
             if zload: in_label +=  f'={zin}'
             elm.ZLabel().at(line.center).left().label(in_label, loc='top').color('black')
+        return d.get_imagedata('svg')
 
     def get_bounds(self):
         return [tuple( [ x[0] for x in self.bounds ]), tuple( [ x[1] for x in self.bounds ])]
