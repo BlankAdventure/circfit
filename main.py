@@ -41,25 +41,42 @@ def wrap(func):
     return run
 
 
-def populate_table(table_data):
-    if table_data is not None:
+
+def populate_table(res_df):
+    def uo(event):
+        idx = int(event.args['rowId'])
+        cm = res_df.loc[idx, 'Model']
+        zin = cm.get_zin(zlist)
+        rc = [z/50 for z in zin] #Normalize to 50 ohms
+        patch = dict(imag=np.imag(rc),real=np.real(rc))
+        fig.update_traces(patch, selector = ({'name':'outputs'}))
+        plot.update()    
+    
+    if res_df is not None:
         table.clear()
+        subset = res_df.loc[:, res_df.columns != 'Model']
         with table:
             ui.label('Fit Results')
-            ui.aggrid.from_pandas(table_data, options=table_options)
+            ui.aggrid.from_pandas(subset, options=table_options).on('cellDoubleClicked', lambda event: uo(event) )
             #grid.on('firstDataRendered', lambda: grid.run_column_method('autoSizeAllColumns'))
+            
+
+            
 @wrap
 def fit() -> None:
     overlay.set_visibility(True)
-    res = ex.do_experiment(zlist, ex.all_components,[2],ct.cost_max_swr)
-    #df = ex.to_pandas(res)
-    #df = df.round(2)
-    populate_table( ex.to_pandas(res).round(2) )
+    res = ex.do_experiment(zlist, ex.all_components,[2,3],ct.cost_max_swr)
+    ex.print_nice(res)
+    populate_table( ex.to_pandas(res, include_model=True).round(2) )
     overlay.set_visibility(False)
 
+
+def update_outputs(event) -> None:
+    #print(event)
+    print(event.args['rowIndex'])  
 # Generates a new list of random load impedances in accordance with the selected
 # distribution and point count, and updates the Smith chart.
-def update() -> None:
+def update_inputs() -> None:
     global zlist
     rmax = r_range.value['max']
     rmin = r_range.value['min']
@@ -101,7 +118,7 @@ with ui.row().classes('w-full'):
                 distr = ui.select({0: 'Uniform', 1: 'Gaussian'},value=0,label='Distribution', 
                                   on_change=lambda x: test.set_visibility(True) if x.value==1 else test.set_visibility(False) 
                                   ).classes('w-32').props('square outlined dense')
-                ui.button('Plot', on_click=update).classes('w-32')
+                ui.button('Plot', on_click=update_inputs).classes('w-32')
             
             with ui.row().classes('items-center'):
                 ui.label('Real:')

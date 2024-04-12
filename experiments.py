@@ -22,12 +22,15 @@ all_components = ['A', 'B', 'C', 'D']
 tline_components = ['A','D']
 
 # Convert a list of results to a pandas dataframe
-def to_pandas(results: list[tuple]):
-#    subset = [ (x[0], x[0].circ, *x[1:]) for x in results]
-    subset = [ (x[0].circ, *x[1:]) for x in results]
-
-    df = pd.DataFrame(subset)
-    df.columns =['Circuit', 'Min', 'Mean', 'p95', 'Max']
+def to_pandas(results: list[tuple], include_model: bool=False):
+    if include_model:
+        subset = [ (x[0], x[0].circ, *x[1:]) for x in results]
+        df = pd.DataFrame(subset)
+        df.columns =['Model', 'Circuit', 'Min', 'Mean', 'p95', 'Max']
+    else:
+        subset = [ (x[0].circ, *x[1:]) for x in results]
+        df = pd.DataFrame(subset)
+        df.columns =['Circuit', 'Min', 'Mean', 'p95', 'Max']
     return df
 
 def print_nice(results: list[tuple]) -> None:
@@ -110,7 +113,9 @@ def clean(combinations: list[str]): #-> tuple[list(tuple), list(tuple)]:
 
 
 if __name__ == "__main__":
-    zlist = random_points_gaussian(30+1j*20, 10, 10, 0.4, 20)
+    #zlist = random_points_gaussian(30+1j*20, 10, 10, 0.4, 20)
+    zlist = random_points_uniform((10,60),(5,20),5)
+    
     res = do_experiment(zlist, all_components,2,ct.cost_max_swr)
     
     #res = do_experiment(30+1j*20, all_components,[2,3,4],ct.cost_max_swr)
