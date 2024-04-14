@@ -22,6 +22,7 @@ max_r = 200
 min_r = 0
 max_i = 100
 min_i = -100
+points = 5
 
 # aggrid table options. Must match column names in results df
 table_options = {'columnDefs': [{'headerName': 'Circuit', 'field': 'Circuit','sortable': False},
@@ -58,15 +59,19 @@ def refresh_table(res_df) -> None:
         grid.clear()
         subset = res_df.loc[:, res_df.columns != 'Model'] #We only want the numerical results data, now the object column
         with grid:   
-            ui.aggrid.from_pandas(subset, options=table_options).on('rowDoubleClicked', lambda event: update_outputs(event) , ['rowId'] ).style('height: 450px;')
+            ui.aggrid.from_pandas(subset, 
+                                  options=table_options).on('rowDoubleClicked', 
+                                  lambda event: update_outputs(event) , ['rowId'] ).classes('bg-rose-300').style('height: 100%') #.classes('max-h-[550px]')
      
 # Do the fit!
 @wrap
 def fit() -> None:
-    overlay.set_visibility(True)
-    res = ex.do_experiment(zlist, ex.all_components,[2,3],ct.cost_max_swr)
-    refresh_table( ex.to_pandas(res, include_model=True).round(2) )
-    overlay.set_visibility(False)
+    if zlist:
+        overlay.set_visibility(True)
+        depth = [int(i.strip()) for i in levels.value.split(',')]
+        res = ex.do_experiment(zlist, ex.all_components,depth,ct.cost_max_swr)
+        refresh_table( ex.to_pandas(res, include_model=True).round(2) )
+        overlay.set_visibility(False)
 
 
     
@@ -117,7 +122,7 @@ with ui.row().classes('w-full bg-green-50'):
         ui.label('Input Config')
         with ui.element('div').classes('border p-2 bg-blue-100 space-y-2 self-center'): #space-y works here, gap doesn't
             with ui.row().classes('items-center'):
-                points = ui.input(value=50, label='Points').classes('w-32').props('square outlined dense')
+                points = ui.input(value=points, label='Points').classes('w-32').props('square outlined dense')
                 distr = ui.select({0: 'Uniform', 1: 'Gaussian'},value=0,label='Distribution', 
                                   on_change=lambda x: test.set_visibility(True) if x.value==1 else test.set_visibility(False) 
                                   ).classes('w-32').props('square outlined dense')
@@ -147,7 +152,7 @@ with ui.row().classes('w-full bg-green-50'):
             # fit options
             with ui.row().classes('items-center'):
                 ui.select(['Max SWR','Mean SWR'],value='Max SWR',label='Minimize').classes('w-32').props('square outlined dense')
-                ui.input(value='2,3', label='Levels').classes('w-32').props('square outlined dense').disable()
+                levels = ui.input(value='2,3', label='Levels').classes('w-32').props('square outlined dense')
                 ui.button('Fit', on_click=fit).classes('w-32')
                 
         # --- smith chart panel ---
@@ -180,17 +185,17 @@ with ui.row().classes('w-full bg-green-50'):
             plot = ui.plotly(fig) 
 
     # ***** this is the right column *****
-    with ui.column().style().classes('border bg-yellow-100 gap-2'):        
+    with ui.column().style().classes('border bg-yellow-100 gap-2').style('height: 800px;'):        
 
         # --- results table ---
         ui.label('Fit Results').classes('border w-full')
-        grid = ui.element('div').style('width: 550px;')
+        grid = ui.element('div').style('width: 550px;').classes('border bg-blue-50')
         #grid = ui.aggrid(options={})
         #with ui.element('div').classes('border p-2 bg-blue-100 self-center').style('width: 550px;') as table:
         #    pass
         # --- circuit image --- 
         ui.label('Schematic').classes('border w-full')
-        image = ui.html().classes('self-center').style('height: 200px;')
+        image = ui.html().classes('self-center')
         #with ui.element('div').classes('border p-2 bg-blue-100'): 
 
 
