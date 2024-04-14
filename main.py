@@ -30,7 +30,9 @@ table_options = {'columnDefs': [{'headerName': 'Circuit', 'field': 'Circuit','so
                        {'headerName': 'Mean', 'field': 'Mean','sortable': True},
                        {'headerName': 'p95', 'field': 'p95','sortable': True},
                        {'headerName': 'Max', 'field': 'Max','sortable': True}],
-        'rowSelection': 'single'}
+        'rowHeight': 25,
+        'rowSelection': 'single',
+        'domLayout': 'normal'}
 
 # Decorator to convert standard funcs to async (func must be called *from* async)
 def wrap(func):
@@ -58,10 +60,16 @@ def refresh_table(res_df) -> None:
     if res_df is not None:
         grid.clear()
         subset = res_df.loc[:, res_df.columns != 'Model'] #We only want the numerical results data, now the object column
-        with grid:   
+        x = len(res_df)
+        if x > 18:
+            style =  f'height: {(18+1)*25 + 15}px;'
+        else:
+            style =  f'height: {(x+1)*25 + 15}px;'
+
+        with grid:
             ui.aggrid.from_pandas(subset, 
-                                  options=table_options).on('rowDoubleClicked', 
-                                  lambda event: update_outputs(event) , ['rowId'] ).classes('bg-rose-300').style('height: 100%') #.classes('max-h-[550px]')
+                        options=table_options).on('rowDoubleClicked', 
+                        lambda event: update_outputs(event) , ['rowId'] ).classes('bg-rose-300').style(style)
      
 # Do the fit!
 @wrap
@@ -114,12 +122,13 @@ overlay.set_visibility(False)
 
 # ***** top-level positioning element *****
 with ui.row().classes('w-full bg-green-50'):
+#with ui.element('div').classes('border bg-red-50 p-2 m-2 gap-2').style('display: flex; width: 100%;'): 
     
     # ***** this is the left column *****
     with ui.column().style().classes('border bg-yellow-100 gap-2'): #control spacing between each element/panel
 
         # --- input config panel ---
-        ui.label('Input Config')
+        ui.label('Input Config').classes('border w-full')
         with ui.element('div').classes('border p-2 bg-blue-100 space-y-2 self-center'): #space-y works here, gap doesn't
             with ui.row().classes('items-center'):
                 points = ui.input(value=points, label='Points').classes('w-32').props('square outlined dense')
@@ -156,6 +165,7 @@ with ui.row().classes('w-full bg-green-50'):
                 ui.button('Fit', on_click=fit).classes('w-32')
                 
         # --- smith chart panel ---
+        ui.label('Smith Chart').classes('border w-full')
         with ui.element('div').classes('border p-2 bg-blue-100'):        
             fig = go.Figure()
             fig.update_layout(margin=dict(l=25, r=25, t=25, b=25), autosize=False, width=500, height=500)        
@@ -185,7 +195,7 @@ with ui.row().classes('w-full bg-green-50'):
             plot = ui.plotly(fig) 
 
     # ***** this is the right column *****
-    with ui.column().style().classes('border bg-yellow-100 gap-2').style('height: 800px;'):        
+    with ui.column().style().classes('border bg-yellow-100 gap-2'):
 
         # --- results table ---
         ui.label('Fit Results').classes('border w-full')
@@ -195,7 +205,7 @@ with ui.row().classes('w-full bg-green-50'):
         #    pass
         # --- circuit image --- 
         ui.label('Schematic').classes('border w-full')
-        image = ui.html().classes('self-center')
+        image = ui.html().classes('self-center border')
         #with ui.element('div').classes('border p-2 bg-blue-100'): 
 
 
