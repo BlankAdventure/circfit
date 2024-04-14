@@ -25,14 +25,16 @@ min_i = -100
 points = 5
 
 # aggrid table options. Must match column names in results df
-table_options = {'columnDefs': [{'headerName': 'Circuit', 'field': 'Circuit','sortable': False},
+table_options = {'columnDefs': [{'headerName': 'Circuit', 'field': 'Circuit','sortable': False, 'width': 240},
                        {'headerName': 'Min', 'field': 'Min','sortable': True},
                        {'headerName': 'Mean', 'field': 'Mean','sortable': True},
                        {'headerName': 'p95', 'field': 'p95','sortable': True},
                        {'headerName': 'Max', 'field': 'Max','sortable': True}],
         'rowHeight': 25,
         'rowSelection': 'single',
-        'domLayout': 'normal'}
+        'domLayout': 'normal',
+        'autoSizeStrategy': {'type': 'fitGridWidth'},
+        }
 
 # Decorator to convert standard funcs to async (func must be called *from* async)
 def wrap(func):
@@ -47,6 +49,7 @@ def wrap(func):
 # Update fit results table and circuit image 
 def refresh_table(res_df) -> None:
     def update_outputs(event) -> None:
+            
         idx = int(event.args['rowId'])
         cm = res_df.loc[idx, 'Model']
         zin = cm.get_zin(zlist)
@@ -54,22 +57,27 @@ def refresh_table(res_df) -> None:
         fig.update_traces(patch=dict(imag=np.imag(rc),real=np.real(rc)), selector = ({'name':'outputs'}))
         plot.update()    
         
-        image.clear()
-        image.set_content(cm.draw(for_web=True).decode('utf-8'))
+        imageDiv.clear()
+        with imageDiv:            
+            ui.button('click', on_click=lambda: h.set_content(cm.draw(for_web=True, F=1e6).decode('utf-8'))).style('position: absolute; z-index: 1; float: left;')  #.style('float: left;')
+
+            with ui.html().classes('border bg-green-50') as h: #items-center flex justify-center
+                h.set_content(cm.draw(for_web=True).decode('utf-8'))
             
     if res_df is not None:
-        grid.clear()
-        subset = res_df.loc[:, res_df.columns != 'Model'] #We only want the numerical results data, now the object column
+        gridDiv.clear()
+        subset = res_df.loc[:, res_df.columns != 'Model'] #We only want the numerical results data, not the objects column
         x = len(res_df)
         if x > 18:
             style =  f'height: {(18+1)*25 + 15}px;'
         else:
             style =  f'height: {(x+1)*25 + 15}px;'
 
-        with grid:
+        with gridDiv:
             ui.aggrid.from_pandas(subset, 
                         options=table_options).on('rowDoubleClicked', 
                         lambda event: update_outputs(event) , ['rowId'] ).classes('bg-rose-300').style(style)
+                                                  
      
 # Do the fit!
 @wrap
@@ -197,15 +205,19 @@ with ui.row().classes('w-full bg-green-50'):
     # ***** this is the right column *****
     with ui.column().style().classes('border bg-yellow-100 gap-2'):
 
-        # --- results table ---
+        # --- results placeholder ---
         ui.label('Fit Results').classes('border w-full')
-        grid = ui.element('div').style('width: 550px;').classes('border bg-blue-50')
-        #grid = ui.aggrid(options={})
-        #with ui.element('div').classes('border p-2 bg-blue-100 self-center').style('width: 550px;') as table:
-        #    pass
-        # --- circuit image --- 
-        ui.label('Schematic').classes('border w-full')
-        image = ui.html().classes('self-center border')
+        gridDiv = ui.element('div').style('width: 550px;').classes('border bg-blue-50')
+
+        # --- image placeholder --- 
+        with ui.row().classes('border justify-between w-full'):
+            ui.label('Schematic')
+            
+            #ui.input().props('square outlined dense').classes('w-16')
+
+        imageDiv = ui.element('div').classes('border bg-teal-100 self-center')
+        #items-center flex justify-center
+        #image = ui.html().classes('self-center border')
         #with ui.element('div').classes('border p-2 bg-blue-100'): 
 
 
