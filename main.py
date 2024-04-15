@@ -11,7 +11,7 @@ import asyncio
 import circuit as ct
 import experiments as ex
 import plotly.graph_objects as go
-from nicegui import ui
+from nicegui import ui, Tailwind
 import numpy as np
 from functools import wraps, partial
 
@@ -23,6 +23,10 @@ min_r = 0
 max_i = 100
 min_i = -100
 points = 5
+
+#section_style = Tailwind().text_color('white').font_weight('bold').background_color('black').padding(0).width('full')
+section_style = ['text-white','font-bold','bg-gray-500','w-full']                                                           
+                                                         
 
 # aggrid table options. Must match column names in results df
 table_options = {'columnDefs': [{'headerName': 'Circuit', 'field': 'Circuit','sortable': False, 'width': 240},
@@ -67,9 +71,9 @@ def refresh_table(res_df) -> None:
         with imageDiv:            
             freq = ui.input(value=None,placeholder='<none>',label='Freq [Hz]').classes('w-28 bg-white').props(
                 'clearable square outlined dense input-class="font-mono" stack-label').style(
-                    'position: absolute; z-index: 1; top: -30px; right: 5px;').on('blur', lambda e: update_dwg(e))
+                    'position: absolute; z-index: 1; top: -8px; right: 0px;').on('blur', lambda e: update_dwg(e))
                     
-            with ui.html().classes('border bg-green-50 max-w-max').style('margin: 0 auto; justify-content: center;') as h:
+            with ui.html().classes('max-w-max').style('margin: 0 auto; justify-content: center;') as h:
                 update_dwg(None)
        
             
@@ -86,7 +90,7 @@ def refresh_table(res_df) -> None:
         with gridDiv:
             ui.aggrid.from_pandas(subset, 
                         options=table_options).on('rowDoubleClicked', 
-                        lambda event: update_outputs(event) , ['rowId'] ).classes('bg-rose-300').style(style)
+                        lambda event: update_outputs(event) , ['rowId'] ).classes().style(style)
                                                   
      
 # Do the fit!
@@ -139,15 +143,15 @@ with ui.element('div').style('position: fixed; display: block; width: 100%; heig
 overlay.set_visibility(False)
 
 # ***** top-level positioning element *****
-with ui.row().classes('w-full bg-green-50'):
+with ui.row().classes():
 #with ui.element('div').classes('border bg-red-50 p-2 m-2 gap-2').style('display: flex; width: 100%;'): 
     
     # ***** this is the left column *****
-    with ui.column().style().classes('border bg-yellow-100 gap-2'): #control spacing between each element/panel
+    with ui.column().classes('gap-2'): #control spacing between each element/panel
 
         # --- input config panel ---
-        ui.label('Input Config').classes('border w-full')
-        with ui.element('div').classes('border p-2 bg-blue-100 space-y-2 self-center'): #space-y works here, gap doesn't
+        ui.label('Input Config').tailwind(*section_style)
+        with ui.element('div').classes('p-2 space-y-2 self-center'): #space-y works here, gap doesn't
             with ui.row().classes('items-center'):
                 points = ui.input(value=points, label='Points').classes('w-32').props('square outlined dense')
                 distr = ui.select({0: 'Uniform', 1: 'Gaussian'},value=0,label='Distribution', 
@@ -183,8 +187,8 @@ with ui.row().classes('w-full bg-green-50'):
                 ui.button('Fit', on_click=fit).classes('w-32')
                 
         # --- smith chart panel ---
-        ui.label('Smith Chart').classes('border w-full')
-        with ui.element('div').classes('border p-2 bg-blue-100'):        
+        ui.label('Smith Chart').tailwind(*section_style)
+        with ui.element('div').classes('p-2'):        
             fig = go.Figure()
             fig.update_layout(margin=dict(l=25, r=25, t=25, b=25), autosize=False, width=500, height=500)        
     
@@ -213,16 +217,16 @@ with ui.row().classes('w-full bg-green-50'):
             plot = ui.plotly(fig) 
 
     # ***** this is the right column *****
-    with ui.column().style().classes('border bg-yellow-100 gap-2'):
+    with ui.column().style().classes('gap-2'):
 
         # --- results placeholder ---
-        ui.label('Fit Results').classes('border w-full')
-        gridDiv = ui.element('div').style('width: 550px;').classes('border bg-blue-50')
+        ui.label('Fit Results').tailwind(*section_style)
+        gridDiv = ui.element('div').style('width: 550px;').classes()
 
         # --- image placeholder --- 
-        with ui.row().classes('border justify-between w-full'):
-            ui.label('Schematic')
-        imageDiv = ui.element('div').classes('border bg-teal-100 w-full').style('position: relative;')
+        #with ui.row().classes('border justify-between w-full'):
+        ui.label('Schematic').tailwind(*section_style)
+        imageDiv = ui.element('div').classes('w-full').style('position: relative;')
 
 
 
