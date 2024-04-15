@@ -49,7 +49,12 @@ def wrap(func):
 # Update fit results table and circuit image 
 def refresh_table(res_df) -> None:
     def update_outputs(event) -> None:
-            
+        def update_dwg(event) -> None:
+            if freq.value is not None:
+                h.set_content(cm.draw(for_web=True, F=1e6).decode('utf-8'))
+            else:
+                h.set_content(cm.draw(for_web=True).decode('utf-8'))
+
         idx = int(event.args['rowId'])
         cm = res_df.loc[idx, 'Model']
         zin = cm.get_zin(zlist)
@@ -59,16 +64,14 @@ def refresh_table(res_df) -> None:
         
         imageDiv.clear()
         with imageDiv:            
-            #ui.button('click', on_click=lambda: h.set_content(cm.draw(for_web=True, F=1e6).decode('utf-8'))).style('position: absolute; z-index: 1; float: left;')  #.style('float: left;')
-            
-            #with ui.element('div').classes('max-w-max bg-purple-50').style('margin: 0 auto; justify-content: center;'):
+            freq = ui.input(value=None,placeholder='<none>',label='Freq [Hz]').classes('w-28').props(
+                'clearable square outlined dense input-class="font-mono" stack-label').style(
+                    'position: absolute; z-index: 1; top: 5px; left: 5px;').on('blur', lambda e: update_dwg(e))
+                    
             with ui.html().classes('border bg-green-50 max-w-max').style('margin: 0 auto; justify-content: center;') as h:
-                    h.set_content(cm.draw(for_web=True).decode('utf-8'))
+                update_dwg(None)
+                #h.set_content(cm.draw(for_web=True).decode('utf-8'))
             
-            # THIS WORKS
-            #with ui.element('div').classes('max-w-max bg-purple-50').style('margin: 0 auto; justify-content: center;'):
-            #    with ui.html().classes('border bg-green-50') as h:
-            #        h.set_content(cm.draw(for_web=True).decode('utf-8'))
             
     if res_df is not None:
         gridDiv.clear()
@@ -221,7 +224,7 @@ with ui.row().classes('w-full bg-green-50'):
             
             #ui.input().props('square outlined dense').classes('w-16')
 
-        imageDiv = ui.element('div').classes('border bg-teal-100 w-full')
+        imageDiv = ui.element('div').classes('border bg-teal-100 w-full').style('position: relative;')
         #items-center flex justify-center
         #image = ui.html().classes('self-center border')
         #with ui.element('div').classes('border p-2 bg-blue-100'): 
