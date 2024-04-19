@@ -79,7 +79,6 @@ def refresh_table(res_df) -> None:
             
             
     if res_df is not None:
-        gridDiv.clear()
         subset = res_df.loc[:, res_df.columns != 'Model'] #We only want the numerical results data, not the objects column
         x = len(res_df)
         if x > 18:
@@ -87,6 +86,7 @@ def refresh_table(res_df) -> None:
         else:
             style =  f'height: {(x+1)*25 + 15}px;'
 
+        gridDiv.clear()
         with gridDiv:
             ui.aggrid.from_pandas(subset, 
                         options=table_options).on('rowDoubleClicked', 
@@ -230,5 +230,4 @@ with ui.row().classes():
 
 
 
-
-ui.run()
+ui.run(port=5000, on_air=False,title='CircFit',host='0.0.0.0')
