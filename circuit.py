@@ -19,6 +19,8 @@ import re
 import schemdraw
 import schemdraw.elements as elm
 
+schemdraw.config(bgcolor='white')
+
 # Dictionary of valid unit strings and their multiple factor
 units = {
          'p': 1e-12,
@@ -243,8 +245,8 @@ class Circuit():
             values = [i + j for i, j in zip(values, comp_str)]            
         else:
             pass       
-        
-        with schemdraw.Drawing(show = not for_web, canvas='svg') as d:            
+
+        with schemdraw.Drawing(show = not for_web, canvas='matplotlib') as d:            
             load_label = '$Z_{load}$'
             if zload: load_label +=  f'={zload}'
             R = elm.ResistorIEC().down().hold().label(load_label)            
