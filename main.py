@@ -11,7 +11,7 @@ import asyncio
 import circuit as ct
 import experiments as ex
 import plotly.graph_objects as go
-from nicegui import ui
+from nicegui import ui, Tailwind
 import numpy as np
 from functools import wraps, partial
 
@@ -22,14 +22,23 @@ max_r = 200
 min_r = 0
 max_i = 100
 min_i = -100
+points = 5
+
+#section_style = Tailwind().text_color('white').font_weight('bold').background_color('black').padding(0).width('full')
+section_style = ['text-white','font-bold','bg-gray-500','w-full']                                                           
+                                                         
 
 # aggrid table options. Must match column names in results df
-table_options = {'columnDefs': [{'headerName': 'Circuit', 'field': 'Circuit','sortable': False},
+table_options = {'columnDefs': [{'headerName': 'Circuit', 'field': 'Circuit','sortable': False, 'width': 240},
                        {'headerName': 'Min', 'field': 'Min','sortable': True},
                        {'headerName': 'Mean', 'field': 'Mean','sortable': True},
                        {'headerName': 'p95', 'field': 'p95','sortable': True},
                        {'headerName': 'Max', 'field': 'Max','sortable': True}],
-        'rowSelection': 'single'}
+        'rowHeight': 25,
+        'rowSelection': 'single',
+        'domLayout': 'normal',
+        'autoSizeStrategy': {'type': 'fitGridWidth'},
+        }
 
 # Decorator to convert standard funcs to async (func must be called *from* async)
 def wrap(func):
@@ -44,6 +53,13 @@ def wrap(func):
 # Update fit results table and circuit image 
 def refresh_table(res_df) -> None:
     def update_outputs(event) -> None:
+        def update_dwg(event) -> None:            
+            if freq.value is not None:
+                #print(freq.value)
+                h.set_content(cm.draw(for_web=True,F=float(freq.value)).decode('utf-8'))
+            else:
+                h.set_content(cm.draw(for_web=True).decode('utf-8'))
+
         idx = int(event.args['rowId'])
         cm = res_df.loc[idx, 'Model']
         zin = cm.get_zin(zlist)
@@ -51,22 +67,41 @@ def refresh_table(res_df) -> None:
         fig.update_traces(patch=dict(imag=np.imag(rc),real=np.real(rc)), selector = ({'name':'outputs'}))
         plot.update()    
         
-        image.clear()
-        image.set_content(cm.draw(for_web=True).decode('utf-8'))
+        imageDiv.clear()
+        with imageDiv:            
+            freq = ui.input(value=None,placeholder='<none>',label='Freq [Hz]').classes('w-28 bg-white').props(
+                'clearable square outlined dense input-class="font-mono" stack-label').style(
+                    'position: absolute; z-index: 1; top: -8px; right: 0px;').on('blur', lambda e: update_dwg(e))
+                    
+            with ui.html().classes('max-w-max').style('margin: 0 auto; justify-content: center;') as h:
+                update_dwg(None)
+       
+            
             
     if res_df is not None:
-        grid.clear()
-        subset = res_df.loc[:, res_df.columns != 'Model'] #We only want the numerical results data, now the object column
-        with grid:   
-            ui.aggrid.from_pandas(subset, options=table_options).on('rowDoubleClicked', lambda event: update_outputs(event) , ['rowId'] ).style('height: 450px;')
+        subset = res_df.loc[:, res_df.columns != 'Model'] #We only want the numerical results data, not the objects column
+        x = len(res_df)
+        if x > 18:
+            style =  f'height: {(18+1)*25 + 15}px;'
+        else:
+            style =  f'height: {(x+1)*25 + 15}px;'
+
+        gridDiv.clear()
+        with gridDiv:
+            ui.aggrid.from_pandas(subset, 
+                        options=table_options).on('rowDoubleClicked', 
+                        lambda event: update_outputs(event) , ['rowId'] ).classes().style(style)
+                                                  
      
 # Do the fit!
 @wrap
 def fit() -> None:
-    overlay.set_visibility(True)
-    res = ex.do_experiment(zlist, ex.all_components,[2,3],ct.cost_max_swr)
-    refresh_table( ex.to_pandas(res, include_model=True).round(2) )
-    overlay.set_visibility(False)
+    if zlist:
+        overlay.set_visibility(True)
+        depth = [int(i.strip()) for i in levels.value.split(',')]
+        res = ex.do_experiment(zlist, ex.all_components,depth,ct.cost_max_swr)
+        refresh_table( ex.to_pandas(res, include_model=True).round(2) )
+        overlay.set_visibility(False)
 
 
     
@@ -108,16 +143,17 @@ with ui.element('div').style('position: fixed; display: block; width: 100%; heig
 overlay.set_visibility(False)
 
 # ***** top-level positioning element *****
-with ui.row().classes('w-full bg-green-50'):
+with ui.row().classes():
+#with ui.element('div').classes('border bg-red-50 p-2 m-2 gap-2').style('display: flex; width: 100%;'): 
     
     # ***** this is the left column *****
-    with ui.column().style().classes('border bg-yellow-100 gap-2'): #control spacing between each element/panel
+    with ui.column().classes('gap-2'): #control spacing between each element/panel
 
         # --- input config panel ---
-        ui.label('Input Config')
-        with ui.element('div').classes('border p-2 bg-blue-100 space-y-2 self-center'): #space-y works here, gap doesn't
+        ui.label('Input Config').tailwind(*section_style)
+        with ui.element('div').classes('p-2 space-y-2 self-center'): #space-y works here, gap doesn't
             with ui.row().classes('items-center'):
-                points = ui.input(value=50, label='Points').classes('w-32').props('square outlined dense')
+                points = ui.input(value=points, label='Points').classes('w-32').props('square outlined dense')
                 distr = ui.select({0: 'Uniform', 1: 'Gaussian'},value=0,label='Distribution', 
                                   on_change=lambda x: test.set_visibility(True) if x.value==1 else test.set_visibility(False) 
                                   ).classes('w-32').props('square outlined dense')
@@ -147,11 +183,12 @@ with ui.row().classes('w-full bg-green-50'):
             # fit options
             with ui.row().classes('items-center'):
                 ui.select(['Max SWR','Mean SWR'],value='Max SWR',label='Minimize').classes('w-32').props('square outlined dense')
-                ui.input(value='2,3', label='Levels').classes('w-32').props('square outlined dense').disable()
+                levels = ui.input(value='2,3', label='Levels').classes('w-32').props('square outlined dense')
                 ui.button('Fit', on_click=fit).classes('w-32')
                 
         # --- smith chart panel ---
-        with ui.element('div').classes('border p-2 bg-blue-100'):        
+        ui.label('Smith Chart').tailwind(*section_style)
+        with ui.element('div').classes('p-2'):        
             fig = go.Figure()
             fig.update_layout(margin=dict(l=25, r=25, t=25, b=25), autosize=False, width=500, height=500)        
     
@@ -180,20 +217,17 @@ with ui.row().classes('w-full bg-green-50'):
             plot = ui.plotly(fig) 
 
     # ***** this is the right column *****
-    with ui.column().style().classes('border bg-yellow-100 gap-2'):        
+    with ui.column().style().classes('gap-2'):
 
-        # --- results table ---
-        ui.label('Fit Results').classes('border w-full')
-        grid = ui.element('div').style('width: 550px;')
-        #grid = ui.aggrid(options={})
-        #with ui.element('div').classes('border p-2 bg-blue-100 self-center').style('width: 550px;') as table:
-        #    pass
-        # --- circuit image --- 
-        ui.label('Schematic').classes('border w-full')
-        image = ui.html().classes('self-center').style('height: 200px;')
-        #with ui.element('div').classes('border p-2 bg-blue-100'): 
+        # --- results placeholder ---
+        ui.label('Fit Results').tailwind(*section_style)
+        gridDiv = ui.element('div').style('width: 550px;').classes()
+
+        # --- image placeholder --- 
+        #with ui.row().classes('border justify-between w-full'):
+        ui.label('Schematic').tailwind(*section_style)
+        imageDiv = ui.element('div').classes('w-full').style('position: relative;')
 
 
 
-
-ui.run()
+ui.run(port=5000, on_air=False,title='CircFit',host='0.0.0.0')
