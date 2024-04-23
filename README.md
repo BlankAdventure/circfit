@@ -3,7 +3,7 @@ Multiple impedance circuit fitting experiments
 
 The usual matching problem is presented as having some network that is a function of frequency, H(w), subject to load impedance Z, and the goal is to optimize H(w) to obtain the best possible match over some frequency range (i.e., bandwidth). However, there is another form of this problem that I have often encountered in devices driving or reading from sensors. Here the system typically operates at some fixed frequency and the sensors present a range of imepdances to the circuit. Thus we want to find a matching circuit topology that best matches the impedance distribution, subject to a fixed frequency. The code in this repo is for exploring this problem.
 
-**-----> circuit.py**
+ **----- circuit.py (Basic Usage) -----**
 
 This module provides basic functionality for generating circuit networks and finding optimal component values given a set of input/load impedances.
 
@@ -62,4 +62,23 @@ print(swr_out)
 [1.00, 1.57, 1.24]
 ```
 Notice the improved match across all 3 loads.
+
+ **----- main.py -----**
+ 
+This module provides a web UI (via nicegui) for more advanced optimizations. In the above example, we specified a fixed network and found optimal values for it. However, there could be better networks available. The web UI, via experiments.py, enumerates all possible network topologies* and optimizes across them. 
+
+An example run can be seen below:
+<img src="https://github.com/BlankAdventure/circfit/assets/24900496/def0db54-3d01-473a-bc3a-973996db43d1" height="600">
+
+Here, 50 load impedances were simulated. Values were generated from a *Uniform* probability distribution (other distributions can be choosen) whose real and imaginary components span the range specfied by the *Real* and *Imag* sliders respecitvely. The resulting impedances can be seen plotted in red on the Smith chart. We've chosen to minimize the *Max SWR* across the range of impedances (others can be choosen). *Levels* specifies the number of circuit components to use - in this case 2 and 3. Once the *Fit* has completed, the table on the right appears. It lists all the possible circuit topologies limited to 2 and 3 components**. Columns show the minimum, mean, 95th-percentile and max value of the resulting matched set of SWRs. Each row can be clicked on and the Smith chart will update to show the matched impedances (blue dots), and, a circuit diagram will appear.
+
+In this caese, notice that the selected 2-component circuit performed the same as the more complicated 3-component circuits. 
+
+*Currently, only networks following a repeated series-shunt topology are generated.
+
+**Combinations consisting of back-to-back arrangements of same-orientated componnets (i.e., Circuit.add_series_X() followed by Circuit.add_series_X() or Circuit.add_parallel_X() followed by Circuit.add_parallel_X() ) are excluded -- exercise for the reader as to why :)
+
+
+
+ 
 
