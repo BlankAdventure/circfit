@@ -100,8 +100,8 @@ def fit(app) -> None:
     if app.zlist:
         app.overlay.set_visibility(True)
         depth = [int(i.strip()) for i in app.levels.value.split(',')]
-        res = ex.do_experiment(app.zlist, ex.all_components,depth,ct.cost_max_swr)
-        refresh_table( app, ex.to_pandas(res, include_model=True).round(2) )
+        result = ex.do_experiment(app.zlist, ex.all_components,depth,ct.cost_max_swr)
+        refresh_table( app, ex.to_pandas(result, include_model=True).round(2) )
         app.overlay.set_visibility(False)
 
 
@@ -118,9 +118,9 @@ async def update_inputs(app) -> None:
     match app.distr.value:
         case 0: #uniform
             app.zlist = ex.random_points_uniform( (rmin, rmax), (imin, imax), int(app.points.value), plot=False)
-        case 1: #guassian
-            sr = ( rmax - rmin ) / 6
-            mr = ( rmax + rmin ) / 2            
+        case 1: #gaussian
+            sr = ( rmax - rmin ) / 6 #Approximate one standard deviation
+            mr = ( rmax + rmin ) / 2 #Calculate the mean           
             si = ( imax - imin ) / 6
             mi = ( imax + imin ) / 2
             app.zlist = ex.random_points_gaussian(mr+1j*mi, sr, si, app.corr.value, int(app.points.value), plot=False)
