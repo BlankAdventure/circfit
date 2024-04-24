@@ -55,7 +55,7 @@ def refresh_table(app, res_df) -> None:
         cm = res_df.loc[idx, 'Model']
         zin = cm.get_zin(app.zlist)
         rc = [z/50 for z in zin] #Normalize to 50 ohms
-        app.fig.update_traces(patch=dict(imag=np.imag(rc),real=np.real(rc)), selector = ({'name':'outputs'}))
+        app.fig.update_traces(patch={"imag": np.imag(rc), "real": np.real(rc)}, selector = {'name':'outputs'})
         app.plot.update()    
         
         app.imageDiv.clear()
@@ -63,8 +63,8 @@ def refresh_table(app, res_df) -> None:
             freq = ui.input(value=None,placeholder='<none>',label='Freq [Hz]').classes('w-28 bg-white').props(
                 'clearable square outlined dense input-class="font-mono" stack-label').style(
                     'position: absolute; z-index: 1; top: -8px; right: 0px;')                
-            with ui.html().classes('max-w-max').style('margin: 0 auto; justify-content: center;') as h:
-                h.set_content(cm.draw(for_web=True).decode('utf-8'))
+            h = ui.html().classes('max-w-max').style('margin: 0 auto; justify-content: center;') 
+            h.set_content(cm.draw(for_web=True).decode('utf-8'))
             freq.on('blur', lambda: h.set_content(cm.draw(for_web=True,F=float(freq.value) if freq.value else None).decode('utf-8')))
                         
     if res_df is not None:
@@ -115,7 +115,7 @@ async def update_inputs(app) -> None:
         case _:
             pass
     rc = [z/50 for z in app.zlist] #Normalize to 50 ohms
-    app.fig.update_traces(patch = dict(imag=np.imag(rc), real=np.real(rc) ), selector = ({'name':'inputs'}))
+    app.fig.update_traces(patch = {"imag": np.imag(rc), "real": np.real(rc)}, selector = {'name':'inputs'} )
     app.plot.update()    
 
 
@@ -182,15 +182,15 @@ class App():
                     self.fig = go.Figure()
                     self.fig.update_layout(margin=dict(l=25, r=25, t=25, b=25), autosize=False, width=500, height=500)      
                     self.fig.add_trace(go.Scattersmith(
-                        imag=[],
-                        real=[],
-                        opacity = 0.7,
-                        marker_symbol='circle',
-                        marker_size=8,
-                        marker_color='red',
-                        mode='markers',
-                        showlegend=False,
-                        name='inputs'
+                        {'imag':[],
+                        'real':[],
+                        'opacity': 0.7,
+                        'marker_symbol':'circle',
+                        'marker_size':8,
+                        'marker_color':'red',
+                        'mode':'markers',
+                        'showlegend':False,
+                        'name':'inputs'}
                     ))
                     self.fig.add_trace(go.Scattersmith(
                         imag=[],
