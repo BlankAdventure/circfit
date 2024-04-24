@@ -51,9 +51,6 @@ def wrap(func):
 # Update fit results table and circuit image 
 def refresh_table(app, res_df) -> None:
     def update_outputs(event) -> None:
-        def update_dwg(event) -> None:            
-            h.set_content(cm.draw(for_web=True,F=float(freq.value) if freq.value else None).decode('utf-8'))
-
         idx = int(event.args['rowId'])
         cm = res_df.loc[idx, 'Model']
         zin = cm.get_zin(app.zlist)
@@ -65,10 +62,10 @@ def refresh_table(app, res_df) -> None:
         with app.imageDiv:            
             freq = ui.input(value=None,placeholder='<none>',label='Freq [Hz]').classes('w-28 bg-white').props(
                 'clearable square outlined dense input-class="font-mono" stack-label').style(
-                    'position: absolute; z-index: 1; top: -8px; right: 0px;').on('blur', update_dwg)                    
-
+                    'position: absolute; z-index: 1; top: -8px; right: 0px;')                
             with ui.html().classes('max-w-max').style('margin: 0 auto; justify-content: center;') as h:
-                update_dwg(None) 
+                h.set_content(cm.draw(for_web=True).decode('utf-8'))
+            freq.on('blur', lambda: h.set_content(cm.draw(for_web=True,F=float(freq.value) if freq.value else None).decode('utf-8')))
                         
     if res_df is not None:
         subset = res_df.loc[:, res_df.columns != 'Model'] #We only want the numerical results data, not the objects column
