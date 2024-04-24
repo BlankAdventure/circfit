@@ -26,8 +26,8 @@ section_style = ['text-white', 'font-bold', 'bg-gray-500', 'w-full']
 
 
 # aggrid table options. Must match column names in results df
-table_options = {'columnDefs': [{'headerName': 'Circuit', 'field': 'Circuit', 
-                                    'sortable': False, 'width': 240},
+table_options = {'columnDefs': [{'headerName': 'Circuit', 'field': 'Circuit',
+                                 'sortable': False, 'width': 240},
                                 {'headerName': 'Min', 'field': 'Min',
                                     'sortable': True},
                                 {'headerName': 'Mean',
@@ -72,7 +72,8 @@ def refresh_table(app, res_df) -> None:
         cm = res_df.loc[idx, 'Model']
         zin = cm.get_zin(app.zlist)
         rc = [z/50 for z in zin]  # Normalize to 50 ohms
-        app.fig.update_traces(patch={"imag": np.imag( rc), "real": np.real(rc)}, selector={'name': 'outputs'})
+        app.fig.update_traces(patch={"imag": np.imag(
+            rc), "real": np.real(rc)}, selector={'name': 'outputs'})
         app.plot.update()
 
         app.imageDiv.clear()
@@ -159,7 +160,7 @@ class App():
         # ***** top-level positioning element *****
         with ui.row():
             # ***** this is the left column *****
-            with ui.column().classes('gap-2'):  
+            with ui.column().classes('gap-2'):
                 # --- input config panel ---
                 ui.label('Input Config').tailwind(*section_style)
                 with ui.element('div').classes('p-2 space-y-2 self-center'):
