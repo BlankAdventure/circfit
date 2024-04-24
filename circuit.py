@@ -246,7 +246,7 @@ class Circuit():
         else:
             pass       
 
-        with schemdraw.Drawing(show = not for_web, canvas='matplotlib') as d:            
+        with schemdraw.Drawing(show = not for_web, canvas='svg') as d:            
             load_label = '$Z_{load}$'
             if zload: load_label +=  f'={zload}'
             R = elm.ResistorIEC().down().hold().label(load_label)            
