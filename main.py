@@ -38,6 +38,18 @@ table_options = {'columnDefs': [{'headerName': 'Circuit', 'field': 'Circuit','so
         'autoSizeStrategy': {'type': 'fitGridWidth'},
         }
 
+
+smith_dict = {'imag':[],
+              'real':[],
+              'opacity': 0.7,
+              'marker_symbol':'circle',
+              'marker_size':8,
+              'marker_color':'red',
+              'mode':'markers',
+              'showlegend':False,
+              'name':'inputs'}
+
+
 # Decorator to convert standard funcs to async (func must be called *from* async)
 def wrap(func):
     @wraps(func)
@@ -180,29 +192,9 @@ class App():
                 ui.label('Smith Chart').tailwind(*section_style)
                 with ui.element('div').classes('p-2'):        
                     self.fig = go.Figure()
-                    self.fig.update_layout(margin=dict(l=25, r=25, t=25, b=25), autosize=False, width=500, height=500)      
-                    self.fig.add_trace(go.Scattersmith(
-                        {'imag':[],
-                        'real':[],
-                        'opacity': 0.7,
-                        'marker_symbol':'circle',
-                        'marker_size':8,
-                        'marker_color':'red',
-                        'mode':'markers',
-                        'showlegend':False,
-                        'name':'inputs'}
-                    ))
-                    self.fig.add_trace(go.Scattersmith(
-                        imag=[],
-                        real=[],
-                        opacity = 0.7,
-                        marker_symbol='circle',
-                        marker_size=8,
-                        marker_color="blue",
-                        mode='markers',
-                        showlegend=False,
-                        name='outputs'
-                    ))        
+                    self.fig.update_layout(margin={"l":25,"r":25,"t":25,"b":25}, autosize=False, width=500, height=500)      
+                    self.fig.add_trace(go.Scattersmith(smith_dict))                    
+                    self.fig.add_trace(go.Scattersmith({**smith_dict, 'marker_color': 'blue', 'name': 'outputs'}))
                     self.plot = ui.plotly(self.fig) 
         
             # ***** this is the right column *****
