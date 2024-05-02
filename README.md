@@ -1,6 +1,8 @@
 # circfit
 Multiple impedance circuit fitting experiments
 
+[Click here for live version](http://www.blankadventure.com/circfit)
+
 The usual matching problem is presented as having some network that is a function of frequency, H(w), subject to load impedance Z, and the goal is to optimize H(w) to obtain the best possible match over some frequency range (i.e., bandwidth). However, there is another form of this problem that I have often encountered in devices driving or reading from sensors. Here the system typically operates at some fixed frequency and the sensors present a range of imepdances to the circuit. Thus we want to find a matching circuit topology that best matches the impedance distribution, subject to a fixed frequency. The code in this repo is for exploring this problem.
 
  **----- circuit.py (Basic Usage) -----**
