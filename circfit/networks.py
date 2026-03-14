@@ -69,6 +69,7 @@ def fit(G: "Topo", z_list: VectorComplex|complex|list[complex]) -> tuple["XNetwo
         X = XNetwork(G)        
         bounds_dict = {"L": {'bounds': (0.01, np.inf),'x0': 10},
                        'C': {'bounds': (-np.inf, 0.01),'x0': -10},
+                       "X": {'bounds': (-np.inf, np.inf),'x0': np.random.uniform(-10,10)}
                        }        
         bounds, x0 = format_bounds(G, bounds_dict)        
         
@@ -137,6 +138,13 @@ class XNetwork(Base):
         arr = np.asarray(z_list)
         result = np.vectorize(self._zin)(arr)
         return result
+    
+    def __str__(self) -> str:   
+        result = ''        
+        for u, v, key in self.edges(data=True):
+            result += f'{u}-{v}: {key["type"]} = {1.0/key["weight"]:.3f}\n'
+        return result
+
 
 
 class Circuit(Base):
@@ -242,7 +250,7 @@ zl = [20-30j, 25-32j, 18-25j]
 
 X,_ = fit(c, zl)
 zo = X.zin( zl )
-
+print(X)
 print(zo)
 print(swr_from_z(zo))
 
