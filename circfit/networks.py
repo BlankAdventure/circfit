@@ -8,18 +8,15 @@ Created on Tue Mar 10 21:10:08 2026
 import numpy as np
 import networkx as nx
 from functools import lru_cache
-from typing import Protocol, overload, Any
+from typing import  Any, cast, TypeAlias
 from scipy.optimize import least_squares
-from collections.abc import Iterable
+#from collections.abc import Iterable
 import numpy.typing as npt
 from collections.abc import Hashable
 
-#matrix = np.ndarray[tuple[int, int],  np.dtype[np.complex64]]
 
-#Matrix = npt.NDArray[np.complex64, np.complex64]
-VectorComplex = npt.NDArray[np.complex64]
-VectorFloat = npt.NDArray[np.float32]
-
+VectorComplex: TypeAlias = npt.NDArray[np.complex64]
+VectorFloat: TypeAlias = npt.NDArray[np.float32]
 
 #VectorComplex = np.ndarray[tuple[int], np.dtype[np.complex64]]
 #VectorFloat = np.ndarray[tuple[int], np.dtype[np.float32]]
@@ -28,27 +25,26 @@ VectorFloat = npt.NDArray[np.float32]
 def rc_from_z(z_list: VectorComplex, z0:float=50) -> VectorComplex:
     return (z_list - z0) / (z_list + z0) 
 
-
-def swr_from_rc (r_list: VectorFloat) -> VectorFloat:
+def swr_from_rc (r_list: VectorComplex) -> VectorFloat:
     return (1+np.abs(r_list)) / (1-np.abs(r_list))
 
 def swr_from_z (z_list: VectorComplex, z0:float=50) -> VectorFloat:
     return swr_from_rc(rc_from_z(z_list,z0))
 
-def max_rc(z_list: VectorComplex) -> float:
+def max_rc(z_list: VectorComplex) -> np.floating:
     return np.max(np.abs(rc_from_z(z_list)))
 
-def mean_rc(z_list: VectorComplex) -> float:
+def mean_rc(z_list: VectorComplex) -> np.floating:
     return np.mean(np.abs(rc_from_z(z_list)))
 
-def max_swr(z_list: VectorComplex) -> float:
+def max_swr(z_list: VectorComplex) -> np.floating:
     return np.max(swr_from_z(z_list))
 
-def mean_swr(z_list: VectorComplex) -> float:
+def mean_swr(z_list: VectorComplex) -> np.floating:
     return np.mean(swr_from_z(z_list))
     
 
-def format_bounds(G: "Topo", bd: dict) -> tuple[list,list]:
+def format_bounds(G: "Topo", bd: dict) -> tuple[list[float],list]:
     bounds = []
     x0 = []
     for u,v,k in G.edges:
@@ -59,19 +55,20 @@ def format_bounds(G: "Topo", bd: dict) -> tuple[list,list]:
     return bounds, x0
 
 
-def x_wrapper(params: VectorFloat, X: "XNetwork", z_list: VectorComplex) -> float:
+def x_wrapper(params: VectorFloat, X: "XNetwork", z_list: VectorComplex) -> np.floating:
     X.set_all_edges('weight', 1.0/np.conj(1.0j*params))
     zo = X.zin(z_list)
-    return max_swr(np.asarray(zo))
+    return max_swr(zo)
 
-def fit(G: "Topo", z_list: VectorComplex) -> tuple["XNetwork",Any]:
+def fit(G: "Topo", z_list: VectorComplex|complex|list[complex]) -> tuple["XNetwork",Any]:
+    z_list = np.asarray(z_list)
     
     if isinstance(z_list[0], complex):
         print (' **** reactance fitting ****')
         
         X = XNetwork(G)        
-        bounds_dict = {"L": {'bounds': (0.0, np.inf),'x0': 10},
-                       'C': {'bounds': (-np.inf, 0.0),'x0': -10},
+        bounds_dict = {"L": {'bounds': (0.01, np.inf),'x0': 10},
+                       'C': {'bounds': (-np.inf, 0.01),'x0': -10},
                        }        
         bounds, x0 = format_bounds(G, bounds_dict)        
         
@@ -128,7 +125,7 @@ class XNetwork(Base):
         e[node_index.index(n1)] = 1.0
         e[node_index.index(n2)] = -1.0
         G_pinv = np.linalg.pinv(L)
-        return e @ G_pinv @ e
+        return cast(complex, e @ G_pinv @ e)
        
     def _zin(self, zload: complex) -> complex:
        key = self.add_element("o","g",zload)
@@ -136,7 +133,7 @@ class XNetwork(Base):
        self.remove_edge("o","g", key=key)
        return z
 
-    def zin(self, z_list: VectorComplex) -> VectorComplex:
+    def zin(self, z_list: VectorComplex|complex|list[complex]) -> VectorComplex:
         arr = np.asarray(z_list)
         result = np.vectorize(self._zin)(arr)
         return result
@@ -166,10 +163,10 @@ class Circuit(Base):
             X.add_element(u, v, x_r)
         return X
 
-    def _zin(self, freq: float, zload:complex) -> complex:
-        return self.to_xnetwork(freq).zin(zload)
+    def _zin(self, freq: float, z_load: VectorComplex) -> VectorComplex:
+        return self.to_xnetwork(freq).zin(z_load)
 
-    def zin(self, z_list: VectorComplex) -> VectorComplex:
+    def zin(self, z_list: VectorComplex|complex|list[complex]) -> VectorComplex:
         temp = lambda row: self._zin(row[0],row[1])
         arr = np.asarray(z_list)
         result = np.apply_along_axis(temp, axis=0, arr=arr)
