@@ -40,10 +40,13 @@ attrs = {
 }
 
 
-
-
 class Graphgen():
+    def __init__(self, n_edges):
+        self.n_edges = n_edges
     
+
+def find_bounds(n_edges: int) -> tuple[int, int, int, int]:
+
     # The nx graph atlas includes all graphs with 1 to 7 nodes. We require a 
     # minium of two, so we start there. 
     nodes = range(2, 8)
@@ -55,9 +58,20 @@ class Graphgen():
     
     bounds = list(zip(nodes, min_edges, max_edges))
 
-    def __init__(self, n_edges):
-        self.n_edges = n_edges
-    pass
+    min_edges = int(np.ceil(n_edges / 2))
+
+    for idx, lower, upper in bounds:
+        if lower <= min_edges <= upper:
+            break
+
+    print(f"Min Nodes: {idx}")
+    print(f"Max Nodes: {n_edges + 1}")
+    print(f"Min Edges: {min_edges}")
+    print(f"Max Edges: {n_edges}")
+
+    return (idx, n_edges + 1, min_edges, n_edges)
+
+
 
 def to_rlc(G: nx.Graph) -> nx.MultiGraph:
     M: nx.MultiGraph = nx.MultiGraph(G)
@@ -118,7 +132,7 @@ def simplify(G: nx.Graph) -> nx.Graph:
 
 
 def internal_nodes(G: nx.Graph) -> list[tuple[int, int]]:
-    """Returns all nodes except i, o, and g"""
+    """Returns all nodes except those on the boudary (ie., i, o, and g)"""
     excluded_keys = ["i", "o", "g"]
     filtered = [(key, value) for key, value in G.degree() if key not in excluded_keys]
     return filtered
@@ -149,15 +163,6 @@ def permute_nodes(G: nx.Graph) -> list[nx.Graph]:
                 out.append(H)
     return out
 
-
-def label_edges(G: nx.Graph, labels: tuple[str, ...], data_name: str = "type") -> nx.Graph:
-    """Applies labels to each edge on data_name attribute"""
-    edges = list(G.edges)
-    edge_dict = dict(zip(edges, labels))
-    nx.set_edge_attributes(G, edge_dict, data_name)
-    return G
-
-
 def permute_edges(G: nx.Graph) -> list[nx.Graph]:
     """Generates all edge permutations"""
     res = []
@@ -166,6 +171,14 @@ def permute_edges(G: nx.Graph) -> list[nx.Graph]:
         L = label_edges(G.copy(), comb)
         res.append(L)
     return res
+
+
+def label_edges(G: nx.Graph, labels: tuple[str, ...], data_name: str = "type") -> nx.Graph:
+    """Applies labels to each edge on data_name attribute"""
+    edges = list(G.edges)
+    edge_dict = dict(zip(edges, labels))
+    nx.set_edge_attributes(G, edge_dict, data_name)
+    return G
 
 
 def edge_combs(n_edges: int) -> list[tuple[str, ...]]:
@@ -177,21 +190,30 @@ def edge_combs(n_edges: int) -> list[tuple[str, ...]]:
     return all_combinations
 
 
-def find_bounds(n: int) -> tuple[int, int, int, int]:
 
-    min_edges = int(np.ceil(n / 2))
+def most_square_grid(n: int):
+    s = int(np.sqrt(n))
 
-    for idx, lower, upper in bounds:
-        if lower <= min_edges <= upper:
-            break
+    best_w = None
+    best_h = None
+    best_score = None
 
-    print(f"Min Nodes: {idx}")
-    print(f"Max Nodes: {n + 1}")
-    print(f"Min Edges: {min_edges}")
-    print(f"Max Edges: {n}")
+    # search near sqrt
+    for w in range(1, s + 1):
+        h = np.ceil(n / w)
 
-    return (idx, n + 1, min_edges, n)
+        area = w * h
+        waste = area - n
+        aspect = abs(h - w)
 
+        score = (aspect, waste)
+
+        if best_score is None or score < best_score:
+            best_score = score
+            best_w = w
+            best_h = h
+
+    return int(best_w), int(best_h)
 
 def plot(g_list: list[nx.Graph], show_labels: bool = False) -> None:
 
@@ -202,6 +224,7 @@ def plot(g_list: list[nx.Graph], show_labels: bool = False) -> None:
                 return r, n // r
             r -= 1
 
+
     if not isinstance(g_list, list):
         g_list = [g_list]
 
@@ -211,14 +234,19 @@ def plot(g_list: list[nx.Graph], show_labels: bool = False) -> None:
         "g": "$GND$",
     }
 
-    r, c = grid_dims(len(g_list))
+    #r, c = grid_dims(len(g_list))
 
+    
+    r, c = most_square_grid(len(g_list))
+    #N = len(g_list)
+    #r = int(np.ceil(np.sqrt(N)))
+    #c = (N + r - 1) / r #// ceil(N / W)
+    #c = int(np.ceil(N/r))
+
+    print(r)
+    print(c)
     fig, axes = plt.subplots(nrows=r, ncols=c, figsize=(8, 8))
     for idx, g in enumerate(g_list):
-        # color_map = ["grey"]*len(g.nodes)
-        # color_map[0] = "red"
-        # color_map[1] = "blue"
-        # color_map[2] = "green"
 
         node_index = list(g.nodes)
         color_map = ["grey"] * len(node_index)
@@ -247,8 +275,13 @@ def plot(g_list: list[nx.Graph], show_labels: bool = False) -> None:
         nx.draw_networkx_edge_labels(g, pos, edge_labels=edge_labels, font_color="grey")
 
         ax.set_box_aspect(1)
-
-
+    
+    axs_flat = axes.ravel()
+    for ax in axs_flat[26:]:
+        fig.delaxes(ax)
+    
+    
+    
 # this is intended to dispaly multigraphs
 def draw(G: nx.Graph) -> None:
     plt.figure()
