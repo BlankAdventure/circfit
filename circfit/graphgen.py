@@ -4,21 +4,6 @@ Created on Thu Mar  5 17:12:17 2026
 
 @author: BlankAdventure
 
-
-class defined by n edges
-
-circfit:
-
--> Performs fitting on reactance graphs across frequency (multigraphs)
-
--> RLCNetwork -> models an RLC circuit network (multigraph)
--> XNetwork -> models a reactance network (graph)
-
--> cbuilder(4)
--> cbuilder.all() -> iterates over all circuits
--> cbuilder.from_atlas([1,2,3]) -> iterates over circuits from classes 1,2,3
--> cbuilder.atlas() -> plots atlas of canoncial circuits
-
 """
 
 import networkx as nx
@@ -27,6 +12,7 @@ import itertools
 import matplotlib.pyplot as plt
 from networkx.algorithms import isomorphism
 from collections.abc import Hashable, Callable
+from pathlib import Path
 
 layouts: dict[str, Callable] = {
         "arf": nx.arf_layout,
@@ -55,7 +41,7 @@ class Graphgen():
     def __init__(self, n_edges):
         self.n_edges = n_edges
         self.atlas: list[nx.Graph] = []
-        self.circuits: dict[int,nx.MultiGraph] = {}
+        self.circuits: dict[int,list[nx.MultiGraph]] = {}
     
     def build_atlas(self) -> None:
         self.atlas = build_atlas(self.n_edges)
@@ -74,8 +60,13 @@ class Graphgen():
         else:
             multidraw(self.atlas)
     
-        
-        
+    def save_images(self,path):
+        for key, graphs in self.circuits.items():
+            for idx, g in enumerate(graphs):
+                path = Path(path)
+                full_path = path / f"GRAPH-{key}-{idx}.png"
+                print(full_path)
+                draw(g,save_file=full_path)
 
 
 def find_bounds(n_edges: int) -> tuple[int, int, int, int]:
@@ -232,7 +223,9 @@ def most_square_grid(n: int) -> tuple[int,int]:
 
 
 def multidraw(g_list: list[nx.Graph], show_labels: bool = False, layout: str = "planar") -> None:
-
+    """Function for drawing graphs. Primarily intended for drawing the atlas
+    graphs. This will not work for multigraphs"""
+    
     if not isinstance(g_list, list):
         g_list = [g_list]
 
@@ -283,8 +276,9 @@ def multidraw(g_list: list[nx.Graph], show_labels: bool = False, layout: str = "
     
     
 # this is intended to dispaly multigraphs
-def draw(G: nx.Graph, layout: str = "shell") -> None:
-    plt.figure()
+def draw(G: nx.Graph, layout: str = "shell", save_file:str|None=None) -> None:
+    """Function for drawing a single multigraph (i.e., a circuit)"""
+
     connectionstyle = [f"arc3,rad={r}" for r in itertools.accumulate([0.15] * 4)]
     custom_labels = {
         "i": "$In$",
@@ -300,9 +294,13 @@ def draw(G: nx.Graph, layout: str = "shell") -> None:
 
     pos = layouts[layout](G)
 
-    nx.draw_networkx_nodes(G, pos, node_color=color_map)
-    nx.draw_networkx_labels(G, pos, font_color="black", labels=custom_labels)
-    nx.draw_networkx_edges(G, pos, edge_color="grey", connectionstyle=connectionstyle)
+    #fig, ax = plt.subplots(1,1,figsize=(5,5))
+    fig = plt.figure(figsize=(6,6))
+    ax = plt.axes(frameon=False)
+    
+    nx.draw_networkx_nodes(G, pos, node_color=color_map, ax=ax)
+    nx.draw_networkx_labels(G, pos, font_color="black", labels=custom_labels, ax=ax)
+    nx.draw_networkx_edges(G, pos, edge_color="grey", connectionstyle=connectionstyle, ax=ax)
 
     labels = {
         tuple(edge): f"{attrs['type']}"
@@ -317,9 +315,16 @@ def draw(G: nx.Graph, layout: str = "shell") -> None:
         label_pos=0.5,
         font_color="black",
         bbox={"alpha": 0},
+        ax=ax
     )
     
-    plt.box(False)
+    
+    if save_file:                
+        plt.savefig(save_file, dpi=72, bbox_inches='tight')
+        plt.close(fig)
+    else:
+        pass
+        #plt.show()
 
 
 def build_atlas(n_edges: int) -> list[nx.Graph]:
@@ -360,7 +365,11 @@ def build_circuits(atlas: list[nx.Graph], n_edges: int, indices: list|None = Non
     circuits = [to_rlc(g) for g in final]
     return circuits
 
-
-n = 3
+#%%
+n = 4
 atlas = build_atlas(n)
-circs = build_circuits(atlas, n, indices=[2])
+circs = build_circuits(atlas, n)
+#%%
+g = Graphgen(3)
+g.build_all()
+g.save_images("c://temp//")
