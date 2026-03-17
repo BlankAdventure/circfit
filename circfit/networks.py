@@ -9,7 +9,7 @@ import numpy as np
 import networkx as nx
 from functools import lru_cache
 from typing import  Any, cast, TypeAlias
-from scipy.optimize import least_squares
+from scipy.optimize import least_squares, differential_evolution, basinhopping, dual_annealing
 #from collections.abc import Iterable
 import numpy.typing as npt
 from collections.abc import Hashable
@@ -17,30 +17,48 @@ from collections.abc import Hashable
 
 VectorComplex: TypeAlias = npt.NDArray[np.complex64]
 VectorFloat: TypeAlias = npt.NDArray[np.float32]
+ZList: TypeAlias = VectorComplex|complex|list[complex]
 
-#VectorComplex = np.ndarray[tuple[int], np.dtype[np.complex64]]
-#VectorFloat = np.ndarray[tuple[int], np.dtype[np.float32]]
+SC: float = 0.01
+OC: float = 1e5
 
 
 def rc_from_z(z_list: VectorComplex, z0:float=50) -> VectorComplex:
+    '''get complex reflection coefficient from impedance'''
     return (z_list - z0) / (z_list + z0) 
 
 def swr_from_rc (r_list: VectorComplex) -> VectorFloat:
+    '''get SWR from complex reflection coefficient'''
     return (1+np.abs(r_list)) / (1-np.abs(r_list))
 
 def swr_from_z (z_list: VectorComplex, z0:float=50) -> VectorFloat:
+    '''get SWR from impedance'''
     return swr_from_rc(rc_from_z(z_list,z0))
 
 def max_rc(z_list: VectorComplex) -> np.floating:
+    '''
+    determine the maximum absolute reflection coefficient value from a 
+    list of impedances
+    '''
     return np.max(np.abs(rc_from_z(z_list)))
 
 def mean_rc(z_list: VectorComplex) -> np.floating:
+    '''
+    determine the average absolute reflection coefficient value from a 
+    list of impedances
+    '''
     return np.mean(np.abs(rc_from_z(z_list)))
 
 def max_swr(z_list: VectorComplex) -> np.floating:
+    '''
+    determine the maximum SWR value from a list of impedances
+    '''    
     return np.max(swr_from_z(z_list))
 
 def mean_swr(z_list: VectorComplex) -> np.floating:
+    '''
+    determine the average SWR value from a list of impedances
+    '''    
     return np.mean(swr_from_z(z_list))
     
 
@@ -51,42 +69,52 @@ def format_bounds(G: "Topo", bd: dict) -> tuple[list[float],list]:
         elem = G.edges[u,v,k]['type']
         bounds.append( bd[elem]["bounds"] )
         x0.append( bd[elem]["x0"] )
-    bounds = [tuple( [ x[0] for x in bounds ]), tuple( [ x[1] for x in bounds ])]            
     return bounds, x0
 
 
 def x_wrapper(params: VectorFloat, X: "XNetwork", z_list: VectorComplex) -> np.floating:
-    X.set_all_edges('weight', 1.0/np.conj(1.0j*params))
+    X.set_all_edges('weight', 1.0/np.conj(-1.0j*params))
     zo = X.zin(z_list)
     return max_swr(zo)
 
-def fit(G: "Topo", z_list: VectorComplex|complex|list[complex]) -> tuple["XNetwork",Any]:
+def fit(G: "Topo", z_list: ZList, method: str = "diffevo") -> tuple["XNetwork",Any]:
     z_list = np.asarray(z_list)
     
     if isinstance(z_list[0], complex):
-        print (' **** reactance fitting ****')
+        print (' **** reactance fitting ****')        
+        
+        bounds_dict = {"l": {'bounds': (SC, OC),'x0': 20},
+                       'c': {'bounds': (-OC, -SC),'x0': -10},
+                       "x": {'bounds': (-OC, OC),'x0': np.random.uniform(-20,20)}
+                       }        
         
         X = XNetwork(G)        
-        bounds_dict = {"L": {'bounds': (0.01, np.inf),'x0': 10},
-                       'C': {'bounds': (-np.inf, 0.01),'x0': -10},
-                       "X": {'bounds': (-np.inf, np.inf),'x0': np.random.uniform(-10,10)}
-                       }        
         bounds, x0 = format_bounds(G, bounds_dict)        
-        
-        func = lambda x: x_wrapper(x,X,z_list)        
-        
-        res = least_squares(func,x0,bounds=bounds,
-                            loss='linear',
-                            jac='3-point',
-                            verbose=1,
-                            method='trf',                            
-                            x_scale=1)
+        func = lambda x: x_wrapper(x,X,z_list)
+
+        if method == "basin":        
+            minimizer_kwargs = {"method": "L-BFGS-B", "bounds": bounds}
+            res = basinhopping(func, x0, minimizer_kwargs=minimizer_kwargs, disp=False)        
+        elif method == "diffevo":        
+            res = differential_evolution(func, bounds)
+        elif method == "anneal":
+            res = dual_annealing(func, bounds)
+        elif method == "lstsqrs":
+            bounds = [tuple( [ x[0] for x in bounds ]), tuple( [ x[1] for x in bounds ])]
+            res = least_squares(func,x0,bounds=bounds,                            
+                             jac='3-point',
+                             verbose=0,
+                             method='trf'
+                             )
+        else:
+            print('invalid method')
+                            
         return X, res
         
         
     elif isinstance(z_list[0], tuple):
-        # not implemented yet
-        pass
+        print (' **** circuit fitting ****')
+        # not implemented yet       
  
     else:
         pass
@@ -107,17 +135,32 @@ class Base(nx.MultiGraph):
         edges = list(self.edges)      
         edge_dict = dict(zip(edges, values))
         nx.set_edge_attributes(self, edge_dict, attrib)
-    
+        
+    def is_valid(self) -> bool:
+        Q = self.copy()
+        Q.remove_node("g")
+        return nx.has_path(Q,"i","o")
     
 class Topo(Base):    
-    def add_element(self, n1: Hashable, n2: Hashable, elem: str):        
-        self.add_edge(n1, n2, type=elem)
-
+    def add_element(self, n1: Hashable, n2: Hashable, elem: str):   
+        if isinstance(elem, str) and len(elem) == 1 and elem.lower() in 'lcx':        
+            self.add_edge(n1, n2, type=elem.lower())
+        else:
+            raise ValueError ("Element must be L, C, or X.")
+    
+    def using(self):
+        pass
+    
+    def fit(self):
+        pass
     
 class XNetwork(Base):
     def add_element(self, n1: Hashable, n2: Hashable, Z:complex) -> int:
-        return self.add_edge(n1, n2, weight=1.0/np.conj(Z)) 
-
+        if abs(Z) > 0:
+            return self.add_edge(n1, n2, weight=1.0/Z)
+        else:
+            raise ValueError ("|Z| must be > 0")
+            
     def _get_impedance(self, n1: Hashable, n2: Hashable) -> complex:
         L =  nx.laplacian_matrix(self).toarray()
         node_index = list(self.nodes)        
@@ -128,13 +171,13 @@ class XNetwork(Base):
         G_pinv = np.linalg.pinv(L)
         return cast(complex, e @ G_pinv @ e)
        
-    def _zin(self, zload: complex) -> complex:
-       key = self.add_element("o","g",zload)
+    def _zin(self, z_load: complex) -> complex:
+       key = self.add_element("o","g",z_load)
        z = self._get_impedance("i","g")
        self.remove_edge("o","g", key=key)
        return z
 
-    def zin(self, z_list: VectorComplex|complex|list[complex]) -> VectorComplex:
+    def zin(self, z_list: ZList) -> VectorComplex:
         arr = np.asarray(z_list)
         result = np.vectorize(self._zin)(arr)
         return result
@@ -142,7 +185,7 @@ class XNetwork(Base):
     def __str__(self) -> str:   
         result = ''        
         for u, v, key in self.edges(data=True):
-            result += f'{u}-{v}: {key["type"]} = {1.0/key["weight"]:.3f}\n'
+            result += f'{u}-{v}: z = {1.0/key["weight"]:.2f}\n'
         return result
 
 
@@ -155,13 +198,23 @@ class Circuit(Base):
                 }    
 
     def add_inductor(self, n1: Hashable, n2: Hashable, value: float):
-        return self.add_edge(n1, n2, type="L", value=value)
-        
+        if value > 0:
+            self.add_edge(n1, n2, type="L", value=value)
+        else:
+            raise ValueError ("Inductance must be > 0.")
+
     def add_capacitor(self, n1: Hashable, n2: Hashable, value: float):
-        return self.add_edge(n1, n2, type="C", value=value)
+        if value > 0:        
+            self.add_edge(n1, n2, type="C", value=value)
+        else:
+            raise ValueError ("Capacitance must be > 0.")
         
     def add_resistor(self, n1: Hashable, n2: Hashable, value: float):
-        return self.add_edge(n1, n2, type="R", value=value)
+        if value > 0:
+            self.add_edge(n1, n2, type="R", value=value)
+        else:
+            raise ValueError("Resistance must be > 0.")
+    
     
     @lru_cache
     def to_xnetwork(self, freq: float) -> XNetwork:
@@ -174,87 +227,44 @@ class Circuit(Base):
     def _zin(self, freq: float, z_load: VectorComplex) -> VectorComplex:
         return self.to_xnetwork(freq).zin(z_load)
 
-    def zin(self, z_list: VectorComplex|complex|list[complex]) -> VectorComplex:
-        temp = lambda row: self._zin(row[0],row[1])
+    def zin(self, z_list: ZList) -> VectorComplex:        
         arr = np.asarray(z_list)
-        result = np.apply_along_axis(temp, axis=0, arr=arr)
+        result = np.apply_along_axis(lambda row: self._zin(row[0],row[1]), axis=0, arr=arr)
         return result
         
 
-# def ranges2(z_list):
-#     SC = 0.1
-#     OC = 100000
-    
-#     f, _ = zip(*z_list)
-    
-#     f_min = min(f)
-#     f_max = max(f)
-
-#     L1 = SC/(2*np.pi*f_min)    
-#     L2 = OC/(2*np.pi*f_min)    
-#     L3 = SC/(2*np.pi*f_max)    
-#     L4 = OC/(2*np.pi*f_max)    
-
-#     C1 = 1/(SC*2*np.pi*f_min)    
-#     C2 = 1/(OC*2*np.pi*f_min)    
-#     C3 = 1/(SC*2*np.pi*f_max)    
-#     C4 = 1/(OC*2*np.pi*f_max)    
-    
-#     Lrng = [L1, L2, L3, L4]
-#     Crng = [C1, C2, C3, C4]
-    
-#     return {"L": (min(Lrng),max(Lrng)), "C": (min(Crng),max(Crng))}
     
 
-# def ranges(z_list):
-#     f, z = zip(*z_list)
-    
-#     z = np.asarray(z)
-    
-#     f_min = min(f)
-#     f_max = max(f)
-    
-#     im = z.imag
-#     xca = np.mean(im[im < 0]) if np.any(im < 0) else np.nan
-#     xla = np.mean(im[im > 0]) if np.any(im > 0) else np.nan
-    
-    
-    
-#     print(f_min)
-#     print(f_max)
-    
-#     print(xca)
-#     print(xla)
-
-#     L1 = xla / (2.0*np.pi*f_min)
-#     L2 = xla / (2.0*np.pi*f_max)
-    
-#     C1 = 1 / (2.0*np.pi*f_min*xca)
-#     C2 = 1 / (2.0*np.pi*f_max*xca)
-    
-
-#     print(L1)
-#     print(L2)
-#     print(C1)
-#     print(C2)
 
 
 
+
+
+#%%
 c = Topo()
-c.add_element("i",1,"L")
-c.add_element(1,'g',"C")
-c.add_element(1,'o',"L")
+#c.add_element("i",1,"C")
+#c.add_element(1,'g',"L")
+#c.add_element(1,'o',"C")
 
+#c.add_element("i",1,"L")
+#c.add_element(1,'g',"C")
+#c.add_element(1,'o',"L")
 
-zl = [20-30j, 25-32j, 18-25j]
+#c.add_element("i","o","X")
+#c.add_element("o",'g',"X")
 
-X,_ = fit(c, zl)
+c.add_element("i","o","c")
+c.add_element("o",'g',"l")
+
+zl = [20-30j] #, 25-32j, 18-25j]
+
+X,res = fit(c, zl,"diffevo")
 zo = X.zin( zl )
 print(X)
 print(zo)
 print(swr_from_z(zo))
 
-# #%%
+#c.using('diffevo').fit(zl)
 
 # zl = [ (1.1e8, 20-30j), (1.3e8, 25-32j), (1.2e8, 18-25j)]
 # X,_ = fit(c, zl)
@@ -262,12 +272,18 @@ print(swr_from_z(zo))
 # zo = X.multi_zin(zl)
 # swr_from_z(zo)
 
-# #%%
-# c = Circuit()
-# c.add_inductor("i","o",56.27*1e-9)
-# c.add_capacitor("o","g", 25.62*1e-12)
-# #print(c.zin(1e8,60+1j*30))
-# print(c.zin( (1e8,60+30j) ))
+#%%
+c = Circuit()
+c.add_inductor("i","o",56.27*1e-9)
+c.add_capacitor("o","g", 25.62*1e-12)
+#print(c.zin(1e8,60+1j*30))
+print(c.zin( (1e8,60+30j) ))
+
+x = XNetwork()
+x.add_element("i","o",-10j)
+print( x.zin(15+20j) )
+
+
 
 
 

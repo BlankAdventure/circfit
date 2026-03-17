@@ -64,8 +64,7 @@ class Graphgen():
         for key, graphs in self.circuits.items():
             for idx, g in enumerate(graphs):
                 path = Path(path)
-                full_path = path / f"GRAPH-{key}-{idx}.png"
-                print(full_path)
+                full_path = path / f"GRAPH-{key}-{idx}.png"                
                 draw(g,save_file=full_path)
 
 
