@@ -26,8 +26,19 @@ import numpy as np
 import itertools
 import matplotlib.pyplot as plt
 from networkx.algorithms import isomorphism
-from collections.abc import Hashable
+from collections.abc import Hashable, Callable
 
+layouts: dict[str, Callable] = {
+        "arf": nx.arf_layout,
+        "circ": nx.circular_layout,
+        "force": nx.forceatlas2_layout,
+        "kamada": nx.kamada_kawai_layout,
+        "planar": nx.planar_layout,        
+        "shell": nx.shell_layout,
+        "spring": nx.spring_layout,
+        "spectral": nx.spectral_layout,
+        "spiral": nx.spiral_layout,        
+        }
 
 nm = isomorphism.categorical_node_match("conn", None)
 
@@ -43,7 +54,29 @@ attrs = {
 class Graphgen():
     def __init__(self, n_edges):
         self.n_edges = n_edges
+        self.atlas: list[nx.Graph] = []
+        self.circuits: dict[int,nx.MultiGraph] = {}
     
+    def build_atlas(self) -> None:
+        self.atlas = build_atlas(self.n_edges)
+
+    def build_circuits(self) -> None:
+        idx = range(0,len(self.atlas))                
+        self.circuits = {i: build_circuits(self.atlas, self.n_edges, indices=[i]) for i in idx}
+
+    def build_all(self) -> None:
+        self.build_atlas()
+        self.build_circuits()
+
+    def draw_atlas(self, layout=None) -> None:
+        if layout:
+            multidraw(self.atlas,layout=layout)
+        else:
+            multidraw(self.atlas)
+    
+        
+        
+
 
 def find_bounds(n_edges: int) -> tuple[int, int, int, int]:
 
@@ -52,26 +85,22 @@ def find_bounds(n_edges: int) -> tuple[int, int, int, int]:
     nodes = range(2, 8)
     
     # The minimum edges obtain from a node n. 
-    min_edges = [n - 1 for n in nodes]
-    
-    max_edges = [n * (n - 1) for n in nodes]
-    
+    min_edges = [n - 1 for n in nodes]    
+    max_edges = [n * (n - 1) for n in nodes]    
     bounds = list(zip(nodes, min_edges, max_edges))
 
-    min_edges = int(np.ceil(n_edges / 2))
+    min_edges_p = int(np.ceil(n_edges / 2))
 
     for idx, lower, upper in bounds:
-        if lower <= min_edges <= upper:
+        if lower <= min_edges_p <= upper:
             break
 
     print(f"Min Nodes: {idx}")
     print(f"Max Nodes: {n_edges + 1}")
-    print(f"Min Edges: {min_edges}")
+    print(f"Min Edges: {min_edges_p}")
     print(f"Max Edges: {n_edges}")
 
-    return (idx, n_edges + 1, min_edges, n_edges)
-
-
+    return (idx, n_edges + 1, min_edges_p, n_edges)
 
 def to_rlc(G: nx.Graph) -> nx.MultiGraph:
     M: nx.MultiGraph = nx.MultiGraph(G)
@@ -100,7 +129,7 @@ def d2_neighbors(G: nx.Graph, node: Hashable) -> tuple[str, str]:
 def validate_edge_count(G: nx.Graph, n_expected: int) -> bool:
     """
     Counts the total number of edges in graph G accounting for double
-    edges (P edges), and returns True/False if this matches n_expected count.
+    edges (P-edges), and returns True/False if this matches n_expected count.
     This is used as a filter to remove graphs with an incorrect edge count.
     """
 
@@ -190,40 +219,19 @@ def edge_combs(n_edges: int) -> list[tuple[str, ...]]:
     return all_combinations
 
 
+def most_square_grid(n: int) -> tuple[int,int]:    
 
-def most_square_grid(n: int):
     s = int(np.sqrt(n))
-
-    best_w = None
-    best_h = None
-    best_score = None
-
-    # search near sqrt
-    for w in range(1, s + 1):
+    candidates = []
+    for w in range(max(1, s - 3), s + 4):
         h = np.ceil(n / w)
+        candidates.append((abs(h - w), w*h - n, w, h))
+    candidates.sort()
+    _, _, w, h = candidates[0]
+    return int(w), int(h)
 
-        area = w * h
-        waste = area - n
-        aspect = abs(h - w)
 
-        score = (aspect, waste)
-
-        if best_score is None or score < best_score:
-            best_score = score
-            best_w = w
-            best_h = h
-
-    return int(best_w), int(best_h)
-
-def plot(g_list: list[nx.Graph], show_labels: bool = False) -> None:
-
-    def grid_dims(n):
-        r = int(np.sqrt(n))
-        while r > 0:
-            if n % r == 0:
-                return r, n // r
-            r -= 1
-
+def multidraw(g_list: list[nx.Graph], show_labels: bool = False, layout: str = "planar") -> None:
 
     if not isinstance(g_list, list):
         g_list = [g_list]
@@ -233,19 +241,10 @@ def plot(g_list: list[nx.Graph], show_labels: bool = False) -> None:
         "o": "$Out$",
         "g": "$GND$",
     }
-
-    #r, c = grid_dims(len(g_list))
-
     
     r, c = most_square_grid(len(g_list))
-    #N = len(g_list)
-    #r = int(np.ceil(np.sqrt(N)))
-    #c = (N + r - 1) / r #// ceil(N / W)
-    #c = int(np.ceil(N/r))
-
-    print(r)
-    print(c)
     fig, axes = plt.subplots(nrows=r, ncols=c, figsize=(8, 8))
+    
     for idx, g in enumerate(g_list):
 
         node_index = list(g.nodes)
@@ -256,8 +255,7 @@ def plot(g_list: list[nx.Graph], show_labels: bool = False) -> None:
 
         ax = plt.subplot(r, c, idx + 1)
 
-        # pos = nx.spectral_layout(g)        #spring
-        pos = nx.spring_layout(g)  # spring
+        pos = layouts[layout](g)
 
         nx.draw(
             g,
@@ -276,14 +274,16 @@ def plot(g_list: list[nx.Graph], show_labels: bool = False) -> None:
 
         ax.set_box_aspect(1)
     
-    axs_flat = axes.ravel()
-    for ax in axs_flat[26:]:
-        fig.delaxes(ax)
+    # Delete the unused axes
+    if len(g_list) > 1:
+        ax_flat = axes.ravel()
+        for ax in ax_flat[len(g_list):]:
+            fig.delaxes(ax)
     
     
     
 # this is intended to dispaly multigraphs
-def draw(G: nx.Graph) -> None:
+def draw(G: nx.Graph, layout: str = "shell") -> None:
     plt.figure()
     connectionstyle = [f"arc3,rad={r}" for r in itertools.accumulate([0.15] * 4)]
     custom_labels = {
@@ -292,33 +292,23 @@ def draw(G: nx.Graph) -> None:
         "g": "$GND$",
     }
 
-    # custom_labels = {
-    #     0: "$In$",
-    #     1: "$Out$",
-    #     2: "$GND$",
-    # }
-
     node_index = list(G.nodes)
     color_map = ["grey"] * len(node_index)
     color_map[node_index.index("i")] = "r"
     color_map[node_index.index("o")] = "b"
     color_map[node_index.index("g")] = "g"
 
-    pos = nx.shell_layout(G)
+    pos = layouts[layout](G)
 
     nx.draw_networkx_nodes(G, pos, node_color=color_map)
     nx.draw_networkx_labels(G, pos, font_color="black", labels=custom_labels)
     nx.draw_networkx_edges(G, pos, edge_color="grey", connectionstyle=connectionstyle)
 
-    # labels = {
-    #   tuple(edge): f"{1/attrs['weight']:.1f}Ω"
-    #   for *edge, attrs in G.edges(keys=True, data=True)
-    #   }
     labels = {
         tuple(edge): f"{attrs['type']}"
         for *edge, attrs in G.edges(keys=True, data=True)
     }
-
+        
     nx.draw_networkx_edge_labels(
         G,
         pos,
@@ -328,10 +318,14 @@ def draw(G: nx.Graph) -> None:
         font_color="black",
         bbox={"alpha": 0},
     )
+    
     plt.box(False)
 
 
 def build_atlas(n_edges: int) -> list[nx.Graph]:
+    """This function builds the set of non-isomorphic graphs meeting the 
+    edge bounding conditions."""
+    
     min_nodes, max_nodes, min_edges, max_edges = find_bounds(n_edges)
     res = []
     for i in range(1, 1253):
@@ -343,10 +337,19 @@ def build_atlas(n_edges: int) -> list[nx.Graph]:
             break
     return res
 
+#def build_circuits(atlas, index, n_edges):
 
-def build_circuits(atlas: list[nx.Graph], n_edges: int) -> list[nx.MultiGraph]:
+def build_circuits(atlas: list[nx.Graph], n_edges: int, indices: list|None = None) -> list[nx.MultiGraph]:
+    """This functions expands the atlas graphs by generating all terminal 
+    perturbations, edge perturbations, and component combinations """
     final = []
-    for h in atlas:
+    
+    if indices:
+        atlas_subset = [atlas[i] for i in indices]
+    else:
+        atlas_subset = atlas
+    
+    for h in atlas_subset:
         perms = permute_nodes(h)
         for p in perms:
             h_e = permute_edges(p)
@@ -360,4 +363,4 @@ def build_circuits(atlas: list[nx.Graph], n_edges: int) -> list[nx.MultiGraph]:
 
 n = 3
 atlas = build_atlas(n)
-circs = build_circuits(atlas, n)
+circs = build_circuits(atlas, n, indices=[2])
