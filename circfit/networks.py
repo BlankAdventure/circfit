@@ -3,14 +3,26 @@
 Created on Tue Mar 10 21:10:08 2026
 
 @author: BlankAdventure
+
+Put one big LCR dict into module scope
+
+
+fit is composed of topo, minimizer, and cost func
+
+
 """
 
 import numpy as np
 import networkx as nx
 from functools import lru_cache
 from typing import  Any, cast, TypeAlias
-from scipy.optimize import least_squares, differential_evolution, basinhopping, dual_annealing
-#from collections.abc import Iterable
+from scipy.optimize import (
+    least_squares, 
+    differential_evolution, 
+    basinhopping, 
+    dual_annealing,
+    minimize
+    )
 import numpy.typing as npt
 from collections.abc import Hashable
 
@@ -61,12 +73,19 @@ def mean_swr(z_list: VectorComplex) -> np.floating:
     '''    
     return np.mean(swr_from_z(z_list))
     
+def max_zofs(z_list: VectorComplex):
+    rr = np.real(z_list) - 50.0
+    ii = np.imag(z_list)
+    
+    diff_mag = np.sqrt(rr**2 + ii**2)
+    return np.max(diff_mag)
+    
 
 def format_bounds(G: "Topo", bd: dict) -> tuple[list[float],list]:
     bounds = []
     x0 = []
     for u,v,k in G.edges:
-        elem = G.edges[u,v,k]['type']
+        elem = G.edges[u,v,k]['component']
         bounds.append( bd[elem]["bounds"] )
         x0.append( bd[elem]["x0"] )
     return bounds, x0
@@ -76,6 +95,9 @@ def x_wrapper(params: VectorFloat, X: "XNetwork", z_list: VectorComplex) -> np.f
     X.set_all_edges('weight', 1.0/np.conj(-1.0j*params))
     zo = X.zin(z_list)
     return max_swr(zo)
+
+# LOCAL methods work well for fully-constrained cicruits
+# with Xs need GLOBAL methods
 
 def fit(G: "Topo", z_list: ZList, method: str = "diffevo") -> tuple["XNetwork",Any]:
     z_list = np.asarray(z_list)
@@ -96,7 +118,7 @@ def fit(G: "Topo", z_list: ZList, method: str = "diffevo") -> tuple["XNetwork",A
             minimizer_kwargs = {"method": "L-BFGS-B", "bounds": bounds}
             res = basinhopping(func, x0, minimizer_kwargs=minimizer_kwargs, disp=False)        
         elif method == "diffevo":        
-            res = differential_evolution(func, bounds)
+            res = differential_evolution(func, bounds,init='sobol',strategy="best2bin")
         elif method == "anneal":
             res = dual_annealing(func, bounds)
         elif method == "lstsqrs":
@@ -106,10 +128,14 @@ def fit(G: "Topo", z_list: ZList, method: str = "diffevo") -> tuple["XNetwork",A
                              verbose=0,
                              method='trf'
                              )
+        elif method == "local":
+            res = minimize(func, x0=x0, bounds=bounds, method='L-BFGS-B', jac='3-point')
+            #res = minimize_scalar(func, bounds=bounds, method='bounded')
         else:
             print('invalid method')
                             
         return X, res
+        #return X, res
         
         
     elif isinstance(z_list[0], tuple):
@@ -122,6 +148,13 @@ def fit(G: "Topo", z_list: ZList, method: str = "diffevo") -> tuple["XNetwork",A
 
 
 class Base(nx.MultiGraph):
+    
+    func_map = {"L": lambda f,x: 1j*2*np.pi*f*x,
+                "C": lambda f,x: 1/(1j*2*np.pi*f*x),
+                "R": lambda f,x: x
+                }    
+
+    
     def __init__(self,  *args, **kwargs):
         super().__init__(*args, **kwargs)    
         self.add_node("i")
@@ -142,22 +175,32 @@ class Base(nx.MultiGraph):
         return nx.has_path(Q,"i","o")
     
 class Topo(Base):    
-    def add_element(self, n1: Hashable, n2: Hashable, elem: str):   
-        if isinstance(elem, str) and len(elem) == 1 and elem.lower() in 'lcx':        
-            self.add_edge(n1, n2, type=elem.lower())
+    def add_component(self, n1: Hashable, n2: Hashable, component: str):   
+        if isinstance(component, str) and len(component) == 1 and component.lower() in 'lcx':        
+            self.add_edge(n1, n2, component=component.lower())
         else:
             raise ValueError ("Element must be L, C, or X.")
     
-    def using(self):
-        pass
     
-    def fit(self):
+    def fit(self, z_list, method):
+        fit (self, z_list, method)
+    
+    def to_circuit(self, f):
         pass
+        # C = Circuit()
+        # for u, v, key in self.edges(data=True):
+        #     x = 1.0/key["weight"]
+        #     if x > 0:
+        #         pass
+                #val = 
+                #C.add_inductor(u,v,val)
+    
     
 class XNetwork(Base):
+    
     def add_element(self, n1: Hashable, n2: Hashable, Z:complex) -> int:
         if abs(Z) > 0:
-            return self.add_edge(n1, n2, weight=1.0/Z)
+            return self.add_edge(n1, n2, weight=1.0/Z, component='x')
         else:
             raise ValueError ("|Z| must be > 0")
             
@@ -185,42 +228,36 @@ class XNetwork(Base):
     def __str__(self) -> str:   
         result = ''        
         for u, v, key in self.edges(data=True):
-            result += f'{u}-{v}: z = {1.0/key["weight"]:.2f}\n'
+            result += f'{u}-{v}: {key["component"].upper()} = {1.0/key["weight"]:.2f}\n'
         return result
 
 
 
 class Circuit(Base):
 
-    func_map = {"L": lambda f,x: 1j*2*np.pi*f*x,
-                "C": lambda f,x: 1/(1j*2*np.pi*f*x),
-                "R": lambda f,x: x
-                }    
-
     def add_inductor(self, n1: Hashable, n2: Hashable, value: float):
         if value > 0:
-            self.add_edge(n1, n2, type="L", value=value)
+            self.add_edge(n1, n2, component="L", value=value)
         else:
             raise ValueError ("Inductance must be > 0.")
 
     def add_capacitor(self, n1: Hashable, n2: Hashable, value: float):
         if value > 0:        
-            self.add_edge(n1, n2, type="C", value=value)
+            self.add_edge(n1, n2, component="C", value=value)
         else:
             raise ValueError ("Capacitance must be > 0.")
         
     def add_resistor(self, n1: Hashable, n2: Hashable, value: float):
         if value > 0:
-            self.add_edge(n1, n2, type="R", value=value)
+            self.add_edge(n1, n2, component="R", value=value)
         else:
             raise ValueError("Resistance must be > 0.")
-    
     
     @lru_cache
     def to_xnetwork(self, freq: float) -> XNetwork:
         X = XNetwork()
         for u, v, key in self.edges:
-            x_r = Circuit.func_map[ self.edges[u,v,key]['type'] ](freq, self.edges[u,v,key]['value'])
+            x_r = Circuit.func_map[ self.edges[u,v,key]['component'] ](freq, self.edges[u,v,key]['value'])
             X.add_element(u, v, x_r)
         return X
 
@@ -235,12 +272,6 @@ class Circuit(Base):
 
     
 
-
-
-
-
-
-#%%
 c = Topo()
 #c.add_element("i",1,"C")
 #c.add_element(1,'g',"L")
@@ -253,12 +284,12 @@ c = Topo()
 #c.add_element("i","o","X")
 #c.add_element("o",'g',"X")
 
-c.add_element("i","o","c")
-c.add_element("o",'g',"l")
+c.add_component("i","o","c")
+c.add_component("o",'g',"l")
 
 zl = [20-30j] #, 25-32j, 18-25j]
 
-X,res = fit(c, zl,"diffevo")
+X,res = fit(c, zl, "local")
 zo = X.zin( zl )
 print(X)
 print(zo)
