@@ -11,7 +11,7 @@ fit is composed of topo, minimizer, and cost func
 
 
 """
-
+import inspect
 import numpy as np
 import networkx as nx
 from functools import lru_cache
@@ -96,11 +96,23 @@ def x_wrapper(params: VectorFloat, X: "XNetwork", z_list: VectorComplex) -> np.f
     zo = X.zin(z_list)
     return max_swr(zo)
 
+def call_with_valid_args(func_to_call: callable, **all_args):
+    sig = inspect.signature(func_to_call)
+    return func_to_call(**{
+        k: v for k, v in all_args.items()
+        if k in sig.parameters
+    })
+
+#module = importlib.import_module("library")
+#func = getattr(module, fname)
+
 # LOCAL methods work well for fully-constrained cicruits
 # with Xs need GLOBAL methods
 
-def fit(G: "Topo", z_list: ZList, method: str = "diffevo") -> tuple["XNetwork",Any]:
+def fit(G: "Topo", z_list: ZList, minimizer, **kwargs) -> tuple["XNetwork",Any]:
     z_list = np.asarray(z_list)
+    
+    
     
     if isinstance(z_list[0], complex):
         print (' **** reactance fitting ****')        
@@ -113,26 +125,9 @@ def fit(G: "Topo", z_list: ZList, method: str = "diffevo") -> tuple["XNetwork",A
         X = XNetwork(G)        
         bounds, x0 = format_bounds(G, bounds_dict)        
         func = lambda x: x_wrapper(x,X,z_list)
-
-        if method == "basin":        
-            minimizer_kwargs = {"method": "L-BFGS-B", "bounds": bounds}
-            res = basinhopping(func, x0, minimizer_kwargs=minimizer_kwargs, disp=False)        
-        elif method == "diffevo":        
-            res = differential_evolution(func, bounds,init='sobol',strategy="best2bin")
-        elif method == "anneal":
-            res = dual_annealing(func, bounds)
-        elif method == "lstsqrs":
-            bounds = [tuple( [ x[0] for x in bounds ]), tuple( [ x[1] for x in bounds ])]
-            res = least_squares(func,x0,bounds=bounds,                            
-                             jac='3-point',
-                             verbose=0,
-                             method='trf'
-                             )
-        elif method == "local":
-            res = minimize(func, x0=x0, bounds=bounds, method='L-BFGS-B', jac='3-point')
-            #res = minimize_scalar(func, bounds=bounds, method='bounded')
-        else:
-            print('invalid method')
+        
+        res = call_with_valid_args(minimizer, fun=func, func=func, x0=x0, bounds=bounds, **kwargs)
+        #bounds = [tuple( [ x[0] for x in bounds ]), tuple( [ x[1] for x in bounds ])]
                             
         return X, res
         #return X, res
@@ -270,7 +265,7 @@ class Circuit(Base):
         return result
         
 
-    
+#%%    
 
 c = Topo()
 #c.add_element("i",1,"C")
@@ -288,8 +283,8 @@ c.add_component("i","o","c")
 c.add_component("o",'g',"l")
 
 zl = [20-30j] #, 25-32j, 18-25j]
-
-X,res = fit(c, zl, "local")
+#X,res = fit(c, zl, differential_evolution)
+X,res = fit(c, zl, minimize,method='L-BFGS-B')
 zo = X.zin( zl )
 print(X)
 print(zo)
