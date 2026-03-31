@@ -15,7 +15,7 @@ import inspect
 import numpy as np
 import networkx as nx
 from functools import lru_cache
-from typing import  Any, cast, TypeAlias
+from typing import  Any, cast, TypeAlias, Callable
 from scipy.optimize import (
     least_squares, 
     differential_evolution, 
@@ -94,9 +94,9 @@ def format_bounds(G: "Topo", bd: dict) -> tuple[list[float],list]:
 def x_wrapper(params: VectorFloat, X: "XNetwork", z_list: VectorComplex) -> np.floating:
     X.set_all_edges('weight', 1.0/np.conj(-1.0j*params))
     zo = X.zin(z_list)
-    return max_swr(zo)
+    return max_zofs(zo)
 
-def call_with_valid_args(func_to_call: callable, **all_args):
+def call_with_valid_args(func_to_call: Callable, **all_args):
     sig = inspect.signature(func_to_call)
     return func_to_call(**{
         k: v for k, v in all_args.items()
@@ -109,7 +109,7 @@ def call_with_valid_args(func_to_call: callable, **all_args):
 # LOCAL methods work well for fully-constrained cicruits
 # with Xs need GLOBAL methods
 
-def fit(G: "Topo", z_list: ZList, minimizer, **kwargs) -> tuple["XNetwork",Any]:
+def fit(G: "Topo", z_list: ZList, minimizer: Callable, **kwargs) -> None|tuple["XNetwork",Any]:
     z_list = np.asarray(z_list)
     
     
@@ -139,7 +139,7 @@ def fit(G: "Topo", z_list: ZList, minimizer, **kwargs) -> tuple["XNetwork",Any]:
  
     else:
         pass
-    
+    return None
 
 
 class Base(nx.MultiGraph):
@@ -299,15 +299,16 @@ print(swr_from_z(zo))
 # swr_from_z(zo)
 
 #%%
-c = Circuit()
-c.add_inductor("i","o",56.27*1e-9)
-c.add_capacitor("o","g", 25.62*1e-12)
-#print(c.zin(1e8,60+1j*30))
-print(c.zin( (1e8,60+30j) ))
 
-x = XNetwork()
-x.add_element("i","o",-10j)
-print( x.zin(15+20j) )
+#c = Circuit()
+#c.add_inductor("i","o",56.27*1e-9)
+#c.add_capacitor("o","g", 25.62*1e-12)
+
+#print(c.zin( (1e8,60+30j) ))
+
+#x = XNetwork()
+#x.add_element("i","o",-10j)
+#print( x.zin(15+20j) )
 
 
 
